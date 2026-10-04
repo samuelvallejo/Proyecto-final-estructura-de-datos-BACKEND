@@ -1,0 +1,1 @@
+The file `pothole.jpg` is a 640 px thumbnail of [Road pothole.jpg](https://commons.wikimedia.org/wiki/File:Road_pothole.jpg) by Antorsu10, licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The image was resized for this test fixture; the thumbnail is distributed under the same license.
