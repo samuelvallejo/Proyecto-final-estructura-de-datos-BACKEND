@@ -84,7 +84,7 @@ def create_app(settings=None):
 
     @app.exception_handler(Exception)
     async def unexpected_error(_, exc):
-        logger.error('operation_failed')
+        logger.error('operation_failed: %s', type(exc).__name__)
         return JSONResponse({'error': 'No se pudo completar la operación. Inténtalo de nuevo.'}, status_code=500)
 
     @app.exception_handler(HTTPException)
