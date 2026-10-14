@@ -1,26 +1,26 @@
 import asyncio
-import hashlib
 import logging
 import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Query, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Query, Depends, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy import create_engine, select, text, func
 from sqlalchemy.exc import SQLAlchemyError
 from .config import Settings
-from .contracts import Position
+from .contracts import Position, Analysis
 from .ai import AIService, validate_image
 from .geocode import Geocoder
 from .pipeline import ScanPipeline
 from .repository import Repository
 from .structures import CircularDoublyLinkedList
 from . import schema as s
+from .auth import router as auth_router, Vault, password_hash, scan_owner, current_session
+from .trips import router as trip_router, validate_scan_trip, link_reports
 
 logger = logging.getLogger(__name__)
-security = HTTPBearer(auto_error=False)
 
 
 def create_app(settings=None):
@@ -28,11 +28,14 @@ def create_app(settings=None):
 
     @asynccontextmanager
     async def lifespan(app):
+        app.state.settings = settings
+        app.state.vault = Vault(settings.data_encryption_key)
+        app.state.dummy_password_hash = password_hash('Dummy-only-password!83')
         engine = create_engine(settings.sqlalchemy_url(), pool_pre_ping=True, pool_size=5, max_overflow=5,
-                               connect_args={'connect_timeout': 5})
+                               hide_parameters=True, connect_args={'connect_timeout': 5})
         with engine.connect() as conn:
             version = conn.execute(text('SELECT version_num FROM alembic_version')).scalar_one()
-            if version != '0001':
+            if version not in ('0002', '0003'):
                 raise RuntimeError('Ejecuta alembic upgrade head antes de iniciar la API.')
         app.state.engine = engine
         app.state.repo = Repository(engine, settings)
@@ -47,9 +50,22 @@ def create_app(settings=None):
             await app.state.ai.close()
             engine.dispose()
 
-    app = FastAPI(title='BacheScan AI', version='2.0.0', lifespan=lifespan)
+    app = FastAPI(title='BacheScan AI', version='3.0.0', lifespan=lifespan,
+                  docs_url=None, redoc_url=None, openapi_url=None)
+    app.include_router(auth_router)
+    app.include_router(trip_router)
     app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()],
-                       allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type'], expose_headers=['Retry-After'])
+                       allow_credentials=True, allow_methods=['GET', 'POST'],
+                       allow_headers=['Content-Type'], expose_headers=['Retry-After'])
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(_, exc):
+        return JSONResponse({'error': 'No se pudo completar la operación. Revisa los requisitos del formulario.'}, status_code=422)
+
+    @app.exception_handler(Exception)
+    async def unexpected_error(_, exc):
+        logger.error('operation_failed')
+        return JSONResponse({'error': 'No se pudo completar la operación. Inténtalo de nuevo.'}, status_code=500)
 
     @app.exception_handler(HTTPException)
     async def http_error(_, exc):
@@ -62,6 +78,14 @@ def create_app(settings=None):
 
     @app.middleware('http')
     async def upload_limit(request, call_next):
+        if request.url.path.startswith('/api/') and request.method == 'POST':
+            origins = {origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()}
+            if request.headers.get('origin') not in origins:
+                return JSONResponse({'error': 'No se pudo completar la operación.'}, status_code=403)
+        if (request.url.path.startswith('/api/auth/') or request.url.path.startswith('/api/trips')) and request.method == 'POST':
+            length = request.headers.get('content-length', '0')
+            if not length.isdigit() or int(length) > 8192:
+                return JSONResponse({'error': 'No se pudo completar la operación.'}, status_code=413)
         if request.url.path == '/api/scan' and request.method == 'POST':
             length = request.headers.get('content-length', '')
             if not length.isdigit():
@@ -71,34 +95,32 @@ def create_app(settings=None):
         response = await call_next(request)
         if request.url.path.startswith('/api/'):
             response.headers['Cache-Control'] = 'no-store'
+            response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
 
-    def session_id(credentials: HTTPAuthorizationCredentials | None = Depends(security)):
-        return app.state.repo.session(credentials.credentials if credentials else None)
+    session_id = scan_owner
 
     @app.get('/api/health')
     def health():
         with app.state.engine.connect() as conn:
             conn.execute(text('SELECT 1'))
             count = conn.execute(select(func.count()).select_from(s.reports)).scalar_one()
-        return {'status': 'ok', 'storage': 'postgresql', 'tables': len(s.metadata.tables), 'reports': count,
-                'geminiConfigured': bool(settings.gemini_api_key),
-                'aiProvider': 'gemini' if settings.gemini_api_key and settings.ai_provider != 'local' else 'local-yolo',
-                'localModelReady': True}
+        return {'status': 'ok'}
 
     @app.post('/api/sessions', status_code=201)
     def new_session():
-        with app.state.engine.begin() as conn:
-            conn.execute(text('SELECT pg_advisory_xact_lock(771013)'))
-            count = conn.execute(select(func.count()).select_from(s.sessions).where(s.sessions.c.created_at > s.now() - 3600_000)).scalar_one()
-            if count >= 1000:
-                raise HTTPException(429, 'Límite temporal de sesiones alcanzado.')
-            # Bloqueo hasta insertar: evita exceder el límite con peticiones concurrentes.
-            return app.state.repo.new_session()
+        raise HTTPException(401, 'Inicia sesión para continuar.')
 
     @app.post('/api/scan')
     async def scan(frame: UploadFile = File(), lat: str | None = Form(None), lng: str | None = Form(None),
-                   accuracy: str | None = Form(None), owner: str = Depends(session_id)):
+                   accuracy: str | None = Form(None), tripId: str | None = Form(None, max_length=36), owner: str = Depends(session_id)):
+        if tripId:
+            from uuid import UUID
+            try:
+                tripId = str(UUID(tripId))
+            except ValueError:
+                raise HTTPException(422, 'No se pudo completar la operación.') from None
+            await asyncio.to_thread(validate_scan_trip, app.state.engine, tripId, owner)
         data = await frame.read(850_001)
         await frame.close()
         try:
@@ -122,8 +144,21 @@ def create_app(settings=None):
                 analysis, provider, model, fallback = await app.state.ai.analyze(data, image)
                 zone = await app.state.geocoder.resolve(position) if analysis.isPothole and position else None
                 duration = round((time.monotonic() - started) * 1000)
-                report, existing, analysis_id = await asyncio.to_thread(app.state.repo.save_scan, owner, data, image,
-                    analysis, provider, model, fallback, duration, position, zone)
+                observations = [Analysis(isPothole=True, **detection.model_dump()) for detection in analysis.detections] if analysis.detections else [analysis]
+                saved_reports, detections, excluded = [], [], []
+                principal = None
+                for observation in observations:
+                    report, existing, analysis_id = await asyncio.to_thread(app.state.repo.save_scan, owner, data, image,
+                        observation, provider, model, fallback, duration, position, zone, excluded)
+                    if report:
+                        excluded.append(report['id'])
+                        saved_reports.append(report)
+                    detections.append({**observation.result(), 'report': report, 'existing': existing})
+                    if principal is None or observation.hazardScore > principal[0].hazardScore:
+                        principal = (observation, report, existing, analysis_id)
+                observation, report, existing, analysis_id = principal
+                if tripId and saved_reports:
+                    await asyncio.to_thread(link_reports, app.state.engine, tripId, owner, saved_reports)
                 await asyncio.to_thread(app.state.repo.finish_usage, usage_id, provider)
                 event = {'sessionId': owner, 'analysisId': analysis_id, 'provider': provider,
                          'isPothole': analysis.isPothole, 'reportId': report['id'] if report else None, 'timestamp': s.now()}
@@ -132,6 +167,7 @@ def create_app(settings=None):
                 if analysis.isPothole and not position:
                     note = 'Falta GPS válido con precisión de hasta ±100 m. El daño se analizó, pero no se ubicó en el mapa.'
                 return {'result': analysis.result(), 'provider': provider, 'fallback': fallback,
+                        'detections': detections if analysis.isPothole else [], 'reports': saved_reports,
                         'report': report, 'existing': existing, 'locationNote': note,
                         'nextScanMs': max(round((settings.scan_interval_seconds if provider == 'gemini' else settings.local_scan_interval_seconds) * 1000), 6000 if provider == 'gemini' else 1500)}
             except Exception:
@@ -153,24 +189,24 @@ def create_app(settings=None):
             logger.error('Falló el escaneo: %s', type(exc).__name__)
             raise HTTPException(502, 'No se pudo analizar este fotograma. Reintenta.') from exc
 
-    @app.get('/api/reports')
+    @app.get('/api/reports', dependencies=[Depends(current_session)])
     def reports(limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
         items, total = app.state.repo.list_reports(limit, offset)
         return {'reports': items, 'total': total, 'hasMore': offset + len(items) < total}
 
-    @app.get('/api/reports/priority')
+    @app.get('/api/reports/priority', dependencies=[Depends(current_session)])
     def priority(limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
         items, total = app.state.repo.list_reports(limit, offset, priority=True)
         return {'reports': items, 'total': total, 'hasMore': offset + len(items) < total}
 
-    @app.get('/api/reports/nearby')
+    @app.get('/api/reports/nearby', dependencies=[Depends(current_session)])
     def nearby(lat: float = Query(ge=-90, le=90), lng: float = Query(ge=-180, le=180),
                radiusKm: float = Query(5, gt=0, le=50), limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
         Position(lat=lat, lng=lng, accuracy=0)
         items, total = app.state.repo.list_reports(limit, offset, position={'lat': lat, 'lng': lng}, radius=radiusKm * 1000)
         return {'reports': items, 'total': total, 'hasMore': offset + len(items) < total}
 
-    @app.get('/api/reports/patrol')
+    @app.get('/api/reports/patrol', dependencies=[Depends(current_session)])
     def patrol(current: str | None = None, direction: str = Query('next', pattern='^(next|previous)$')):
         items, _ = app.state.repo.list_reports(200, priority=True)
         ring = CircularDoublyLinkedList[dict]()
@@ -197,7 +233,7 @@ def create_app(settings=None):
         events = app.state.pipeline.history.reverse() if reverse else iter(app.state.pipeline.history)
         return {'events': [{k: v for k, v in event.items() if k != 'sessionId'} for event in events if event['sessionId'] == owner]}
 
-    @app.get('/api/data-structures/stats')
+    @app.get('/api/data-structures/stats', dependencies=[Depends(current_session)])
     def stats():
         return {**app.state.pipeline.stats(),
                 'array': {'use': 'Tensor NumPy NCHW de imagen y arrays de reportes paginados'},

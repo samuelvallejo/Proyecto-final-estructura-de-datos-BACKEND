@@ -84,7 +84,7 @@ class Repository:
         stmt = insert(s.zones).values(**values).on_conflict_do_update(index_elements=['cache_key'], set_={k: v for k, v in values.items() if k != 'cache_key'})
         return conn.execute(stmt.returning(s.zones.c.id)).scalar_one()
 
-    def save_scan(self, session_id, data, image, analysis, provider, model, fallback, duration, position, zone):
+    def save_scan(self, session_id, data, image, analysis, provider, model, fallback, duration, position, zone, excluded_reports=None):
         result = analysis.result()
         with self.engine.begin() as conn:
             conn.execute(text('SELECT pg_advisory_xact_lock(771012)'))
@@ -108,11 +108,15 @@ class Repository:
                 if position:
                     radius = max(15, min(position.accuracy, 35))
                     # Búsqueda indexada por latitud + Haversine, válida en polos y antimeridiano.
-                    candidates = conn.execute(select(s.potholes).where(
+                    candidate_query = select(s.potholes).where(
                         s.potholes.c.created_at > s.now() - 30 * 60_000,
                         s.potholes.c.kind == analysis.potholeType,
                         s.potholes.c.lat.between(position.lat - radius / 110000, position.lat + radius / 110000),
-                        s.potholes.c.status != 'REPAIRED')).mappings().all()
+                        s.potholes.c.status != 'REPAIRED')
+                    if excluded_reports:
+                        candidate_query = candidate_query.where(s.potholes.c.id.not_in(
+                            select(s.reports.c.pothole_id).where(s.reports.c.id.in_(excluded_reports))))
+                    candidates = conn.execute(candidate_query).mappings().all()
                     match = next((row for row in candidates if distance(row, position.model_dump()) <= radius), None)
                     if match:
                         report_id = conn.execute(select(s.reports.c.id).where(s.reports.c.pothole_id == match['id'])

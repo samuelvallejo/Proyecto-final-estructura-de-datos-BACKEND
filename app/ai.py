@@ -9,7 +9,7 @@ import onnxruntime as ort
 from PIL import Image, ImageOps
 from google import genai
 from google.genai import types
-from .contracts import Analysis, BoundingBox
+from .contracts import Analysis, BoundingBox, DamageDetection
 
 logger = logging.getLogger(__name__)
 PROMPT = '''Analiza únicamente daños VISIBLES en la calzada: bache, hundimiento,
@@ -74,6 +74,7 @@ class LocalDetector:
         if not len(indexes):
             return Analysis(isPothole=False, potholeType=None, hazardScore=0,
                             aiDescription='No se detectó un bache con suficiente confianza.', riskFactors=[])
+        hits = []
         for index in indexes[np.argsort(scores[indexes])[::-1]]:
             cx, cy, box_width, box_height = candidates[:4, index]
             score = scores[index]
@@ -86,17 +87,32 @@ class LocalDetector:
             if coords['xmax'] <= coords['xmin'] or coords['ymax'] <= coords['ymin']:
                 continue
             box = BoundingBox(**coords)
+            # Non-maximum suppression: retain separate holes, suppress overlapping proposals.
+            if any(box_iou(box, hit.boundingBox) > .45 for hit in hits):
+                continue
             area = (box.xmax - box.xmin) * (box.ymax - box.ymin) / 1_000_000
             # Prioridad por extensión relativa del daño visible, no por confianza
             # del modelo. No implica profundidad ni tamaño físico medidos.
             risk = 85 if area >= .35 else 70 if area >= .18 else 50 if area >= .06 else 35
-            return Analysis(isPothole=True, potholeType='BACHE', hazardScore=risk,
+            hits.append(Analysis(isPothole=True, potholeType='BACHE', hazardScore=risk,
                             aiDescription=f'Posible bache; confianza del detector local {round(float(score) * 100)}%. Requiere verificación.',
                             riskFactors=['Daño visible en la calzada', f'El recuadro ocupa aproximadamente {round(area * 100)}% del encuadre',
                                          'Profundidad y dimensiones físicas sin medir'],
-                            boundingBox=box, confidence=float(score))
+                            boundingBox=box, confidence=float(score)))
+            if len(hits) >= 20:
+                break
+        if hits:
+            principal = max(hits, key=lambda hit: hit.hazardScore)
+            principal.detections = [DamageDetection.model_validate(hit.model_dump(exclude={'detections'})) for hit in hits]
+            return principal
         return Analysis(isPothole=False, potholeType=None, hazardScore=0,
                         aiDescription='No se detectó un bache con suficiente confianza.', riskFactors=[])
+
+
+def box_iou(a, b):
+    intersection = max(0, min(a.xmax, b.xmax) - max(a.xmin, b.xmin)) * max(0, min(a.ymax, b.ymax) - max(a.ymin, b.ymin))
+    union = (a.xmax - a.xmin) * (a.ymax - a.ymin) + (b.xmax - b.xmin) * (b.ymax - b.ymin) - intersection
+    return intersection / union if union else 0
 
 
 class AIService:

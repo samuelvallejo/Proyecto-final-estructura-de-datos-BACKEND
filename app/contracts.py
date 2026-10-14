@@ -15,6 +15,15 @@ class BoundingBox(BaseModel):
         return self
 
 
+class DamageDetection(BaseModel):
+    boundingBox: BoundingBox
+    confidence: float = Field(ge=0, le=1)
+    hazardScore: int = Field(ge=0, le=100)
+    aiDescription: str = Field(min_length=1, max_length=500)
+    riskFactors: list[str] = Field(max_length=5)
+    potholeType: Literal['BACHE', 'HUNDIMIENTO', 'GRIETA', 'OTRO_DANO'] = 'BACHE'
+
+
 class Analysis(BaseModel):
     isPothole: bool
     potholeType: Literal['BACHE', 'HUNDIMIENTO', 'GRIETA', 'OTRO_DANO'] | None
@@ -23,6 +32,7 @@ class Analysis(BaseModel):
     riskFactors: list[str] = Field(max_length=5)
     boundingBox: BoundingBox | None = None
     confidence: float | None = Field(default=None, ge=0, le=1)
+    detections: list[DamageDetection] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode='after')
     def coherent(self):
@@ -32,6 +42,7 @@ class Analysis(BaseModel):
             self.hazardScore = 0
             self.riskFactors = []
             self.boundingBox = None
+            self.detections = []
         elif self.potholeType is None:
             raise ValueError('Falta tipo de daño')
         return self

@@ -22,6 +22,7 @@ FIXTURE = Path(__file__).parents[2] / 'backend/tests/fixtures/pothole.jpg'
 
 @pytest.fixture
 def client(monkeypatch):
+    from cryptography.fernet import Fernet
     import psycopg
     from alembic.config import Config
     from alembic import command
@@ -35,13 +36,14 @@ def client(monkeypatch):
     monkeypatch.setenv('DATABASE_URL', scoped.render_as_string(hide_password=False))
     command.upgrade(Config('alembic.ini'), 'head')
     settings = Settings(_env_file=None, database_url=str(scoped), ai_provider='local', scan_interval_seconds=0,
+                        data_encryption_key=Fernet.generate_key().decode(), secure_cookies=False,
                         local_scan_interval_seconds=0,
                         nominatim_user_agent='', gemini_api_key='', max_scans_per_hour=100)
     # str(URL) oculta contraseñas; render explícito necesario si el servidor usa password.
     settings.database_url = scoped.render_as_string(hide_password=False)
     app = create_app(settings)
     try:
-        with TestClient(app) as test:
+        with TestClient(app, headers={'Origin': 'http://localhost:5173'}) as test:
             test.app = app
             yield test
     finally:
@@ -51,9 +53,10 @@ def client(monkeypatch):
 
 
 def token(client):
-    session = client.post('/api/sessions')
-    assert session.status_code == 201, session.text
-    return {'Authorization': 'Bearer ' + session.json()['token']}
+    credentials = {'email': uuid.uuid4().hex + '@example.com', 'password': 'Testing-password!73'}
+    assert client.post('/api/auth/register', json={**credentials, 'displayName': 'Persona de prueba', 'confirmPassword': credentials['password']}).status_code == 201
+    assert client.post('/api/auth/login', json=credentials).status_code == 200
+    return {}
 
 
 def scan(client, headers, coords=None, data=None):
@@ -62,7 +65,7 @@ def scan(client, headers, coords=None, data=None):
 
 
 def test_migration_scan_persistence_deduplication_and_geography(client):
-    assert client.get('/api/health').json()['tables'] == 43
+    assert client.get('/api/health').json() == {'status': 'ok'}
     headers = token(client)
     async def geocode(position):
         return {'cacheKey': f'{position.lat:.4f},{position.lng:.4f}', 'source': 'nominatim',
@@ -117,7 +120,7 @@ def test_auth_image_limits_cors_and_no_damage(client):
     response = scan(client, headers, {'lat': '0', 'lng': '0', 'accuracy': '5'}, buffer.getvalue())
     assert response.status_code == 200 and not response.json()['result']['isPothole']
     assert response.json()['report'] is None
-    options = client.options('/api/scan', headers={'Origin': 'http://localhost:5173', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'authorization'})
+    options = client.options('/api/scan', headers={'Origin': 'http://localhost:5173', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type'})
     assert options.status_code == 200
     assert 'access-control-allow-origin' not in client.get('/api/health', headers={'Origin': 'https://unknown.example'}).headers
 
@@ -168,6 +171,7 @@ def test_database_constraints_and_geodesic_edges(client):
 
 
 def test_import_preserves_id_timestamp_address_and_is_idempotent(client, tmp_path):
+    token(client)
     import sqlite3
     import json
     from scripts.import_sqlite import import_records

@@ -29,6 +29,21 @@ def test_legacy_two_class_detector_remains_compatible():
     assert model.analyze(validate_image(FIXTURE.read_bytes())).isPothole
 
 
+def test_multiple_detections_suppress_duplicate_boxes():
+    import numpy as np
+    detector = LocalDetector.__new__(LocalDetector)
+    detector.input_width = detector.input_height = 320
+    detector.class_count = 1
+    detector.pothole_class = 0
+    detector.threshold = .55
+    detector.input = SimpleNamespace(name='image')
+    output = np.array([[[100, 105, 250], [100, 105, 250], [80, 80, 50], [80, 80, 50], [.95, .90, .80]]], dtype=np.float32)
+    detector.session = SimpleNamespace(run=lambda *_: [output])
+    result = detector.analyze(Image.new('RGB', (320, 320)))
+    assert len(result.detections) == 2
+    assert [round(hit.confidence, 2) for hit in result.detections] == [.95, .80]
+
+
 @pytest.mark.skipif(not os.environ.get('TEST_PHONE_FRAME_DIR'), reason='Grabación privada no incluida en el repositorio')
 def test_phone_recording_regression():
     model = LocalDetector('../backend/models/pothole-seg-640.onnx')

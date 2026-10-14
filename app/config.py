@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     local_max_global_scans_per_hour: int = 6000
     local_scan_interval_seconds: float = 1.5
     session_hours: int = 24
+    data_encryption_key: str = ''
+    secure_cookies: bool = True
 
     def sqlalchemy_url(self) -> str:
         if not self.database_url:

@@ -41,7 +41,8 @@ def table(name, *fields):
 roles = table('roles', col('name', unique=True))
 permissions = table('permissions', col('code', unique=True))
 role_permissions = table('role_permissions', ref('role_id', 'roles'), ref('permission_id', 'permissions'), UniqueConstraint('role_id', 'permission_id'))
-users = table('users', col('email', unique=True), col('display_name'), col('password_hash', Text))
+users = table('users', col('email', Text, unique=True), col('display_name', Text), col('password_hash', Text), Column('email_lookup', String(64), unique=True))
+auth_attempts = table('auth_attempts', col('ip_hash', String(64)), col('account_hash', String(64)))
 user_roles = table('user_roles', ref('user_id', 'users'), ref('role_id', 'roles'), UniqueConstraint('user_id', 'role_id'))
 devices = table('devices', ref('user_id', 'users', True), col('platform'))
 sessions = table('sessions', ref('device_id', 'devices'), col('token_hash', String(64), unique=True), col('expires_at', BigInteger))
@@ -81,6 +82,11 @@ repair_materials = table('repair_materials', ref('repair_id', 'repairs'), ref('m
 audit_events = table('audit_events', ref('session_id', 'sessions', True), col('action'), col('entity_id', String(36)), col('details', json_type))
 geocode_cache = table('geocode_cache', col('cache_key', String(64), unique=True), col('payload', json_type), col('expires_at', BigInteger))
 api_usage = table('api_usage', ref('session_id', 'sessions'), col('status'), col('provider'), Column('error_code', String(100)))
+trips = table('trips', ref('user_id', 'users'), ref('session_id', 'sessions'), col('encrypted_details', Text), Column('ended_at', BigInteger))
+trip_samples = table('trip_samples', ref('trip_id', 'trips'), col('encrypted_position', Text))
+trip_reports = table('trip_reports', ref('trip_id', 'trips'), ref('report_id', 'reports'), UniqueConstraint('trip_id', 'report_id'))
+Index('ix_auth_attempts_recent', auth_attempts.c.created_at)
+Index('ix_trips_one_active_user', trips.c.user_id, unique=True, postgresql_where=trips.c.ended_at.is_(None))
 
 for relation in metadata.tables.values():
     for field in relation.c:

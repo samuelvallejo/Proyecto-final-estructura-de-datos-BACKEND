@@ -10,4 +10,4 @@ COPY scripts ./scripts
 COPY alembic.ini ./alembic.ini
 COPY models/pothole-seg-640.onnx ./models/pothole-seg-640.onnx
 COPY MODELO_LOCAL.md ./MODELO_LOCAL.md
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --no-access-log --log-level warning"]
