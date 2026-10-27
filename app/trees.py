@@ -22,3 +22,21 @@ class BinarySearchTree(Generic[K, V]):
     def __init__(self):
         self.root: TreeNode[K, V] | None = None
         self.size = 0
+
+    def insert(self, key: K, value: V) -> bool:
+        if self.root is None:
+            self.root = TreeNode(key, value)
+            self.size = 1
+            return True
+        current = self.root
+        while True:
+            if key == current.key:
+                current.value = value
+                return False
+            side = 'left' if key < current.key else 'right'
+            child = getattr(current, side)
+            if child is None:
+                setattr(current, side, TreeNode(key, value))
+                self.size += 1
+                return True
+            current = child
