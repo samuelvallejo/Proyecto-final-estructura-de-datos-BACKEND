@@ -136,3 +136,13 @@ class BinarySearchTree(Generic[K, V]):
         return {'weight': self.size, 'height': self.height, 'levels': self.height + 1,
                 'leaves': leaves, 'branches': branches, 'internalNodes': self.size - leaves,
                 'order': 2, 'maxDegree': maximum_degree}
+
+    def trace(self, key: K) -> list[TreeNode[K, V]]:
+        result = []
+        current = self.root
+        while current is not None:
+            result.append(current)
+            if key == current.key:
+                break
+            current = current.left if key < current.key else current.right
+        return result
