@@ -122,3 +122,7 @@ def test_range_outside():
 
 def test_range_reversed():
     with pytest.raises(ValueError): list(example().between(7,2))
+
+
+def test_remove_absent():
+    tree = example(); assert not tree.remove(99) and len(tree) == 7
