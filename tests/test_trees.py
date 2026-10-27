@@ -356,3 +356,8 @@ def test_places_duplicate_id():
 def test_place_aggregates():
     tree = ReportPlaceTree([report('a',20),report('b',90)])
     assert all(n.report_count == 2 and n.highest_score == 90 for n in tree.nodes.values() if n.kind != 'report')
+
+
+def test_place_levels_and_height():
+    tree = ReportPlaceTree([report()]); metrics = tree.metrics()
+    assert metrics['height'] == 4 and metrics['levels'] == 5 and metrics['weight'] == 5 and metrics['reports'] == 1
