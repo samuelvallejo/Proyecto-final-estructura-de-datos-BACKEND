@@ -41,3 +41,7 @@ class ReportRiskIndex:
         if not 0 <= minimum <= maximum <= 100:
             raise ValueError('Rango de riesgo inválido')
         return [node.value for node in self.tree.between((minimum, -math.inf, ''), (maximum, math.inf, chr(0x10ffff)))]
+
+    def search_path(self, report_id):
+        report = self.by_id.get(report_id)
+        return [node.value['id'] for node in self.tree.trace(report_key(report))] if report is not None else []
