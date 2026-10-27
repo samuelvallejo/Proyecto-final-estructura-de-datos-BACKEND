@@ -43,3 +43,8 @@ Una hoja no tiene hijos. Una rama tiene hijos y no es la raíz. Los nodos intern
 `from_items` ordena las claves, aplica la última escritura para claves repetidas y conecta los puntos medios con sus hijos. La ordenación cuesta O(n log n); la conexión posterior cuesta O(n). La altura de una instantánea de 200 nodos es como máximo 7.
 
 Esta construcción no transforma la clase en un AVL: no hay rotaciones automáticas al insertar posteriormente. `rebalance` reconstruye explícitamente una instantánea y conserva claves y valores. Las pruebas incluyen árboles profundos para comprobar que las operaciones iterativas no dependen del límite de recursión de Python.
+## Árbol de ubicaciones
+
+La jerarquía es raíz → ciudad → barrio → vía → reporte. Cada nodo mantiene hijos explícitos, cantidad de reportes y riesgo máximo de su subárbol. Los nombres se agrupan sin diferencias de mayúsculas, espacios o acentos; los identificadores de rama se derivan de la ruta completa.
+
+Barrios con el mismo nombre en ciudades distintas permanecen separados. Los nombres ausentes usan ramas «sin identificar» sin perder las coordenadas del reporte. Una ubicación real con el mismo texto que una etiqueta de respaldo permanece separada de la ubicación desconocida.
