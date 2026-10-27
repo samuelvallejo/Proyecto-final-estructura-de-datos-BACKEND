@@ -341,3 +341,8 @@ def test_streets_keep_neighborhood_scope():
 def test_unknown_and_real_fallback_label_are_distinct():
     tree = ReportPlaceTree([report('a',city=None),report('b',city='Ciudad sin identificar')])
     assert len(tree.root.children) == 2
+
+
+def test_place_ids_escape_path_boundaries():
+    assert place_id(['a:b','c']) != place_id(['a','b:c'])
+    assert place_key('  BOGOTÁ   Norte ') == 'bogota norte'
