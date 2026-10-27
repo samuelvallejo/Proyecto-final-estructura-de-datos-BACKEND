@@ -14,3 +14,8 @@ En BacheScan, el valor de cada nodo es un reporte vial público. `app/trees.py` 
 | insert y search | Inserción, actualización y búsqueda por clave |
 
 No se sustituyen los enlaces por una lista ordenada. Las listas y arrays se usan como auxiliares para construir o recorrer nodos reales.
+## Clave y empates
+
+La clave es `(hazardScore, timestamp, id)`. Así se conservan dos huecos con la misma puntuación y fecha. Un identificador de reporte repetido actualiza ese reporte; no crea otro nodo. El recorrido descendente prioriza riesgo alto, fecha reciente y luego identificador descendente.
+
+La selección SQL usa el mismo desempate para que las páginas prioritarias mantengan un orden global coherente. La puntuación es orientativa; ordenar por ella no mide la profundidad física del daño ni convierte un aviso comunitario en diagnóstico de YOLO.
