@@ -30,3 +30,8 @@ def test_insert_left():
 
 def test_insert_right():
     tree = example(); assert tree.root.right.key == 7 and tree.root.right.right.key == 8
+
+
+def test_equal_key_updates_value():
+    tree = example(); assert not tree.insert(3, 'nuevo')
+    assert tree.search(3) == 'nuevo' and len(tree) == 7
