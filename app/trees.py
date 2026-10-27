@@ -112,3 +112,12 @@ class BinarySearchTree(Generic[K, V]):
                 pending.enqueue((node.left, level + 1, node))
             if node.right is not None:
                 pending.enqueue((node.right, level + 1, node))
+
+    def traverse(self, order='inorder') -> Iterator[TreeNode[K, V]]:
+        methods = {'inorder': self.in_order, 'descending': self.reverse_order,
+                   'preorder': self.pre_order, 'postorder': self.post_order}
+        if order == 'level':
+            return (node for node, _, _ in self.level_order())
+        if order not in methods:
+            raise ValueError('Recorrido inválido')
+        return methods[order]()
