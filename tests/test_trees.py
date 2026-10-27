@@ -252,3 +252,8 @@ def test_report_key_tie_order():
 def test_report_risk_order():
     index = ReportRiskIndex([report('a',20),report('b',90),report('c',60)])
     assert [r['hazardScore'] for r in index.ordered()] == [90,60,20]
+
+
+def test_report_upsert_moves_key():
+    index = ReportRiskIndex([report('a',20),report('b',60)]); index.upsert(report('a',90))
+    assert [r['id'] for r in index.ordered()] == ['a','b'] and index.tree.size == 2
