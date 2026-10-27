@@ -326,3 +326,8 @@ def test_places_unknown_labels():
 def test_places_normalization():
     tree = ReportPlaceTree([report('a',city=' Bogotá '),report('b',city='BOGOTA')])
     assert len(tree.root.children) == 1 and tree.root.children[0].report_count == 2
+
+
+def test_neighborhoods_keep_city_scope():
+    tree = ReportPlaceTree([report('a',city='Cali'),report('b',city='Bogotá')])
+    assert len([node for node in tree.nodes.values() if node.kind == 'neighborhood']) == 2
