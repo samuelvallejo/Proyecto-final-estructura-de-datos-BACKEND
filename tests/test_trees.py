@@ -263,3 +263,7 @@ def test_invalid_upsert_preserves_previous():
     index = ReportRiskIndex([report('a',20)])
     with pytest.raises(ValueError): index.upsert(report('a',101))
     assert index.ordered()[0]['hazardScore'] == 20
+
+
+def test_report_remove_identity():
+    index = ReportRiskIndex([report('a')]); assert index.remove('a') and not index.remove('a') and index.tree.size == 0
