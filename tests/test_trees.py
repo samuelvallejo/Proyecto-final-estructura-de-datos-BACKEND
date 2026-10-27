@@ -376,3 +376,7 @@ def test_places_stable_input_order():
 
 def test_empty_places_tree():
     tree = ReportPlaceTree(); assert tree.metrics()['reports'] == 0 and tree.metrics()['weight'] == 1 and tree.metrics()['height'] == 0
+
+
+def test_missing_search_trace():
+    assert keys(example().trace(4)) == [5,2,3]
