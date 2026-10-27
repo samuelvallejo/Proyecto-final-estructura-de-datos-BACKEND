@@ -76,29 +76,29 @@ def test_bad_images_and_inconsistent_ai_payload():
     assert result.hazardScore == 0 and result.potholeType is None and result.riskFactors == []
 
 
-def test_gemini_quota_failure_falls_back_and_circuit_breaker():
+def test_camera_uses_exclusively_custom_weights(monkeypatch, custom_detector):
+    monkeypatch.setattr('app.ai.PotholeDetector', lambda settings: custom_detector)
     async def run():
-        service = AIService(Settings(_env_file=None, ai_provider='auto'))
-        generate = AsyncMock(side_effect=RuntimeError('quota exceeded'))
-        service.client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate)))
+        service = AIService(Settings(_env_file=None, ai_provider='auto', gemini_api_key='unused'))
         data = FIXTURE.read_bytes()
         first = await service.analyze(data, validate_image(data))
         second = await service.analyze(data, validate_image(data))
         assert first[1] == second[1] == 'local-yolo'
-        assert first[3] is True
-        assert generate.await_count == 1
+        assert first[2] == 'best.pt' and first[3] is False
+        assert service.local is custom_detector
+        assert service.settings.ai_provider == 'local'
     asyncio.run(run())
 
 
-def test_gemini_success_validated_structured_result():
+def test_camera_missing_custom_model_never_falls_back(monkeypatch):
+    from app.pothole_detector import ModelUnavailable
+    class Missing:
+        def analyze(self, image):
+            raise ModelUnavailable('model unavailable')
+    monkeypatch.setattr('app.ai.PotholeDetector', lambda settings: Missing())
     async def run():
         service = AIService(Settings(_env_file=None))
-        payload = Analysis(isPothole=True, potholeType='BACHE', hazardScore=86,
-                           aiDescription='Daño visible', riskFactors=['Bordes irregulares']).model_dump_json()
-        generate = AsyncMock(return_value=SimpleNamespace(text=payload))
-        service.client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate)))
         data = FIXTURE.read_bytes()
-        analysis, provider, _, fallback = await service.analyze(data, validate_image(data))
-        assert provider == 'gemini' and not fallback and analysis.result()['hazardLevel'] == 'CRITICAL'
-        assert generate.call_args.kwargs['config'].response_json_schema
+        with pytest.raises(ModelUnavailable):
+            await service.analyze(data, validate_image(data))
     asyncio.run(run())

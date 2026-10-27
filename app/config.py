@@ -1,4 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
+from typing import Literal
 
 
 class Settings(BaseSettings):
@@ -6,7 +8,14 @@ class Settings(BaseSettings):
     database_url: str = ''
     gemini_api_key: str = ''
     gemini_model: str = 'gemini-3.5-flash-lite'
-    ai_provider: str = 'auto'
+    ai_provider: str = 'local'
+    pothole_model_path: str = 'models/best.pt'
+    yolo_model_sha256: str = 'af2ac6ce7bfec72e71643659ac946caf80ced84869e526a60135c457abfbb200'
+    yolo_pothole_class_id: int = Field(default=0, ge=0)
+    yolo_confidence: float = Field(default=.25, gt=0, le=1, allow_inf_nan=False)
+    yolo_device: Literal['auto', 'cpu', 'cuda'] = 'auto'
+    yolo_image_size: int = Field(default=640, ge=320, le=1280, multiple_of=32)
+    yolo_cpu_threads: int = Field(default=2, ge=1, le=8)
     local_model_path: str = '../backend/models/pothole-seg-640.onnx'
     local_confidence_threshold: float = .55
     cors_origins: str = 'http://localhost:5173,http://127.0.0.1:5173'

@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .config import Settings
 from .contracts import Position, Analysis
 from .ai import AIService, validate_image
+from .pothole_detector import validate_photo, MAX_PHOTO_BYTES, PHOTO_TYPES, ModelUnavailable, MODEL_UNAVAILABLE
 from .geocode import Geocoder
 from .pipeline import ScanPipeline
 from .repository import Repository
@@ -39,7 +40,8 @@ def create_app(settings=None):
                 raise RuntimeError('Ejecuta alembic upgrade head antes de iniciar la API.')
         app.state.engine = engine
         app.state.repo = Repository(engine, settings)
-        app.state.ai = AIService(settings)
+        app.state.ai = await asyncio.to_thread(AIService, settings)
+        app.state.detector = app.state.ai.local
         app.state.geocoder = Geocoder(engine, settings)
         app.state.pipeline = ScanPipeline(settings.max_pending_scans)
         app.state.pipeline.start()
@@ -59,7 +61,9 @@ def create_app(settings=None):
                        allow_headers=['Content-Type'], expose_headers=['Retry-After'])
 
     @app.exception_handler(RequestValidationError)
-    async def validation_error(_, exc):
+    async def validation_error(request, exc):
+        if request.url.path == '/api/detect/potholes':
+            return JSONResponse({'error': 'Selecciona una imagen JPEG, PNG o WebP para detectar baches.'}, status_code=422)
         return JSONResponse({'error': 'No se pudo completar la operación. Revisa los requisitos del formulario.'}, status_code=422)
 
     @app.exception_handler(Exception)
@@ -92,6 +96,12 @@ def create_app(settings=None):
                 return JSONResponse({'error': 'Se requiere Content-Length para cargar fotogramas.'}, status_code=411)
             if int(length) > 900_000:
                 return JSONResponse({'error': 'El fotograma excede el límite de carga.'}, status_code=413)
+        if request.url.path == '/api/detect/potholes' and request.method == 'POST':
+            length = request.headers.get('content-length', '')
+            if not length.isdigit():
+                return JSONResponse({'error': 'Se requiere Content-Length para cargar la imagen.'}, status_code=411)
+            if int(length) > MAX_PHOTO_BYTES + 64 * 1024:
+                return JSONResponse({'error': 'La imagen excede el límite de 4 MB.'}, status_code=413)
         response = await call_next(request)
         if request.url.path.startswith('/api/'):
             response.headers['Cache-Control'] = 'no-store'
@@ -114,6 +124,8 @@ def create_app(settings=None):
     @app.post('/api/scan')
     async def scan(frame: UploadFile = File(), lat: str | None = Form(None), lng: str | None = Form(None),
                    accuracy: str | None = Form(None), tripId: str | None = Form(None, max_length=36), owner: str = Depends(session_id)):
+        if not app.state.detector.ready:
+            raise HTTPException(503, MODEL_UNAVAILABLE)
         if tripId:
             from uuid import UUID
             try:
@@ -188,6 +200,52 @@ def create_app(settings=None):
         except Exception as exc:
             logger.error('Falló el escaneo: %s', type(exc).__name__)
             raise HTTPException(502, 'No se pudo analizar este fotograma. Reintenta.') from exc
+
+    @app.post('/api/detect/potholes')
+    async def detect_potholes(image: UploadFile = File(), owner: str = Depends(session_id)):
+        try:
+            if image.content_type not in PHOTO_TYPES:
+                raise HTTPException(415, 'Selecciona una imagen JPEG, PNG o WebP.')
+            data = await image.read(MAX_PHOTO_BYTES + 1)
+            content_type = image.content_type
+        finally:
+            await image.close()
+        if len(data) > MAX_PHOTO_BYTES:
+            raise HTTPException(413, 'La imagen excede el límite de 4 MB.')
+        if not app.state.detector.ready:
+            raise HTTPException(503, MODEL_UNAVAILABLE)
+        if app.state.pipeline.pending >= settings.max_pending_scans:
+            raise HTTPException(429, 'La cola de análisis está llena. Reintenta en unos segundos.', headers={'Retry-After': '5'})
+        usage_id = await asyncio.to_thread(app.state.repo.reserve_usage, owner)
+
+        async def operation():
+            decoded = None
+            try:
+                try:
+                    decoded = await asyncio.to_thread(validate_photo, data, content_type)
+                except ValueError as exc:
+                    raise HTTPException(400, str(exc)) from None
+                result = await asyncio.to_thread(app.state.detector.detect, decoded)
+                await asyncio.to_thread(app.state.repo.finish_usage, usage_id, 'custom-yolov8')
+                return result
+            except Exception:
+                await asyncio.to_thread(app.state.repo.finish_usage, usage_id, 'custom-yolov8', True)
+                raise
+            finally:
+                if decoded is not None:
+                    decoded.close()
+        try:
+            return await app.state.pipeline.submit(operation)
+        except OverflowError:
+            await asyncio.to_thread(app.state.repo.finish_usage, usage_id, 'not-run', True)
+            raise HTTPException(429, 'La cola de análisis está llena. Reintenta en unos segundos.') from None
+        except ModelUnavailable:
+            raise HTTPException(503, MODEL_UNAVAILABLE) from None
+        except (HTTPException, SQLAlchemyError):
+            raise
+        except Exception:
+            logger.error('pothole_photo_inference_failed')
+            raise HTTPException(502, 'No se pudo analizar la imagen. Inténtalo de nuevo.') from None
 
     @app.get('/api/reports', dependencies=[Depends(current_session)])
     def reports(limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
