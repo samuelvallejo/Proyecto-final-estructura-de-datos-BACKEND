@@ -86,3 +86,7 @@ def test_root_level_and_parent():
 
 def test_level_order_fifo():
     assert [(node.key, level) for node, level, _ in example().level_order()] == [(5,1),(2,2),(7,2),(1,3),(3,3),(6,3),(8,3)]
+
+
+def test_empty_height():
+    assert BinarySearchTree().height == -1 and BinarySearchTree().metrics()['levels'] == 0
