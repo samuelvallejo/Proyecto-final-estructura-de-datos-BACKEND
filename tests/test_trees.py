@@ -273,3 +273,8 @@ def test_report_range_zero_and_hundred():
     index = ReportRiskIndex([report('a',0),report('b',100),report('c',50)])
     assert [r['id'] for r in index.in_range(0,0)] == ['a']
     assert [r['id'] for r in index.in_range(100,100)] == ['b']
+
+
+def test_report_search_path():
+    index = ReportRiskIndex(report(str(n),n) for n in range(7)); path = index.search_path('1')
+    assert path[0] == index.tree.root.value['id'] and path[-1] == '1' and index.search_path('missing') == []
