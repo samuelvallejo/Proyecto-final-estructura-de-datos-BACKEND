@@ -58,3 +58,14 @@ class ReportRiskIndex:
         return {'rootId': self.tree.root.value['id'] if self.tree.root is not None else None,
                 'nodes': nodes, 'metrics': self.tree.metrics(),
                 'traversal': {'order': order, 'reportIds': [node.value['id'] for node in self.tree.traverse(order)]}}
+
+
+@dataclass
+class PlaceNode:
+    id: str
+    label: str
+    kind: str
+    report_id: str | None = None
+    children: list['PlaceNode'] = field(default_factory=list)
+    report_count: int = 0
+    highest_score: int = 0
