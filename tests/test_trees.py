@@ -164,3 +164,10 @@ def test_remove_internal_right_child():
 def test_remove_two_children_immediate_successor():
     tree = BinarySearchTree.from_items([(1,'a'),(2,'b'),(3,'c')]); tree.remove(2)
     assert keys(tree.in_order()) == [1,3] and tree.validate()
+
+
+def test_remove_deep_successor_preserves_its_child():
+    tree = BinarySearchTree()
+    for value in [10,5,20,15,17,25]: tree.insert(value,str(value))
+    tree.remove(10)
+    assert keys(tree.in_order()) == [5,15,17,20,25] and tree.search(17) == '17' and tree.validate()
