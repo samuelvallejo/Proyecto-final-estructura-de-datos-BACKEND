@@ -17,3 +17,8 @@ def keys(nodes):
 def test_empty_root_and_weight():
     tree = BinarySearchTree()
     assert tree.root is None and len(tree) == 0 and not tree
+
+
+def test_first_insert_is_root():
+    tree = BinarySearchTree(); assert tree.insert(5, 'raíz')
+    assert tree.root.key == 5 and tree.root.value == 'raíz' and len(tree) == 1
