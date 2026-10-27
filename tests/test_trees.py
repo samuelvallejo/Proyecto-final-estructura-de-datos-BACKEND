@@ -43,3 +43,7 @@ def test_search_root():
 
 def test_search_left_descendant():
     assert example().search(1) == '1'
+
+
+def test_search_right_descendant():
+    assert example().search(8) == '8'
