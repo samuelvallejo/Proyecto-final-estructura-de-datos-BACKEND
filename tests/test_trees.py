@@ -126,3 +126,7 @@ def test_range_reversed():
 
 def test_remove_absent():
     tree = example(); assert not tree.remove(99) and len(tree) == 7
+
+
+def test_remove_left_leaf():
+    tree = example(); assert tree.remove(1) and tree.root.left.left is None and tree.validate()
