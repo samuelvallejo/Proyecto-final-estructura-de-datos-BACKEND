@@ -227,3 +227,13 @@ class Repository:
                     entity_id=report_id, details={'locationSource': 'phone-gps'}))
                 existing = False
         return self.get_report(report_id), existing
+
+    def tree_reports(self, minimum=0, maximum=100, limit=200):
+        active = self.query().where(s.potholes.c.status.not_in(['REPAIRED', 'REJECTED']))
+        filtered = active.where(s.risk_assessments.c.score.between(minimum, maximum))
+        with self.engine.connect() as conn:
+            total = conn.execute(select(func.count()).select_from(active.subquery())).scalar_one()
+            matched = conn.execute(select(func.count()).select_from(filtered.subquery())).scalar_one()
+            rows = conn.execute(filtered.order_by(s.risk_assessments.c.score.desc(),
+                s.reports.c.created_at.desc(), s.reports.c.id).limit(limit)).mappings().all()
+        return [self.serialize(row) for row in rows], total, matched
