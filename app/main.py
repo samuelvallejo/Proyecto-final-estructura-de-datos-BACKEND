@@ -22,6 +22,7 @@ from .auth import router as auth_router, Vault, password_hash, scan_owner, curre
 from .trips import router as trip_router, validate_scan_trip, link_reports
 from .community import router as community_router
 from .tree_api import router as tree_router
+from .graph_api import router as graph_router
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ def create_app(settings=None):
     app.include_router(trip_router)
     app.include_router(community_router)
     app.include_router(tree_router)
+    app.include_router(graph_router)
     app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()],
                        allow_credentials=True, allow_methods=['GET', 'POST'],
                        allow_headers=['Content-Type'], expose_headers=['Retry-After'])
@@ -305,6 +307,7 @@ def create_app(settings=None):
                 'stack': {'use': 'Historial LIFO de navegación en el frontend'},
                 'binarySearchTree': {'use': 'Orden y rangos de riesgo; búsqueda y recorridos de reportes reales'},
                 'generalTree': {'use': 'Exploración jerárquica: ciudad, barrio, vía y bache'},
+                'graph': {'use': 'Red de cercanía entre baches: listas de adyacencia, BFS, DFS y Dijkstra'},
                 'persistence': 'PostgreSQL; las estructuras de ejecución son temporales por proceso'}
 
     return app
