@@ -68,3 +68,10 @@ def test_tree_api_is_read_only(client):
     with client.app.state.engine.connect() as conn:
         assert conn.execute(select(func.count()).select_from(s.reports)).scalar_one() == 2
         assert conn.execute(select(func.count()).select_from(s.audit_events)).scalar_one() == before
+
+
+def test_tree_api_two_accounts(client):
+    token(client); ids = seed_reports(client,[70,80]); first = client.get(URL).json()
+    token(client); second = client.get(URL).json()
+    assert {r['id'] for r in second['reports']} == set(ids)
+    assert second['binary'] == first['binary'] and second['geography'] == first['geography']
