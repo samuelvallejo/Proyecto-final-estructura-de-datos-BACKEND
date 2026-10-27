@@ -21,3 +21,11 @@ class ReportRiskIndex:
     def __init__(self, reports=()):
         self.by_id = {report['id']: report for report in reports}
         self.tree = BinarySearchTree.from_items((report_key(report), report) for report in self.by_id.values())
+
+    def upsert(self, report):
+        key = report_key(report)
+        previous = self.by_id.get(report['id'])
+        if previous is not None:
+            self.tree.remove(report_key(previous))
+        self.by_id[report['id']] = report
+        self.tree.insert(key, report)
