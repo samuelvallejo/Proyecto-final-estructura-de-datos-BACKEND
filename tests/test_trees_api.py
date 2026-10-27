@@ -26,3 +26,10 @@ def test_tree_api_filters(client):
     body = client.get(URL+'?minScore=60&maxScore=90').json()
     assert [r['hazardScore'] for r in body['reports']] == [60,70,90]
     assert body['scope']['totalReports'] == 6 and body['scope']['totalMatched'] == 3
+
+
+def test_tree_api_invalid_parameters(client):
+    token(client)
+    for query in ['minScore=-1','maxScore=101','minScore=90&maxScore=20','limit=201','limit=0','order=internal-secret-value']:
+        response = client.get(URL+'?'+query)
+        assert response.status_code == 422 and 'internal-secret-value' not in response.text
