@@ -114,3 +114,7 @@ def test_root_not_a_branch():
 
 def test_range_inclusive():
     assert keys(example().between(2,7)) == [2,3,5,6,7]
+
+
+def test_range_outside():
+    assert list(example().between(20,30)) == []
