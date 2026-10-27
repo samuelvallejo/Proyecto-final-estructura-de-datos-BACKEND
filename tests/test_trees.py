@@ -222,3 +222,7 @@ def test_random_mutations_preserve_bst():
         if rng.random() < .6: expected[key] = key*2; tree.insert(key,key*2)
         else: expected.pop(key,None); tree.remove(key)
         assert tree.validate() and [(n.key,n.value) for n in tree.in_order()] == sorted(expected.items())
+
+
+def test_unknown_traversal():
+    with pytest.raises(ValueError): example().traverse('invalid')
