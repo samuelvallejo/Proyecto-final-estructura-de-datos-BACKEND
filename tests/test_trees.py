@@ -26,3 +26,7 @@ def test_first_insert_is_root():
 
 def test_insert_left():
     tree = example(); assert tree.root.left.key == 2 and tree.root.left.left.key == 1
+
+
+def test_insert_right():
+    tree = example(); assert tree.root.right.key == 7 and tree.root.right.right.key == 8
