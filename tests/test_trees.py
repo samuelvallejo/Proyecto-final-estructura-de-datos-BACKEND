@@ -198,3 +198,8 @@ def test_validate_corrupt_order():
 def test_validate_cycle():
     tree = example(); tree.root.left.left = tree.root
     assert not tree.validate()
+
+
+def test_validate_weight_mismatch():
+    tree = example(); tree.size += 1
+    assert not tree.validate()
