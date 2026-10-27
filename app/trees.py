@@ -190,3 +190,27 @@ class BinarySearchTree(Generic[K, V]):
             parent.right = child
         self.size -= 1
         return True
+
+    @classmethod
+    def from_items(cls, items):
+        # Igual que la agenda del PDF: una clave repetida actualiza el valor.
+        pairs = sorted(items, key=lambda pair: pair[0])
+        unique = []
+        for pair in pairs:
+            if unique and unique[-1][0] == pair[0]:
+                unique[-1] = pair
+            else:
+                unique.append(pair)
+        tree = cls()
+        tasks = [(0, len(unique), None, 'root')]
+        while tasks:
+            first, last, parent, side = tasks.pop()
+            if first >= last:
+                continue
+            middle = (first + last) // 2
+            node = TreeNode(*unique[middle])
+            setattr(parent if parent is not None else tree, side, node)
+            tree.size += 1
+            tasks.append((middle + 1, last, node, 'right'))
+            tasks.append((first, middle, node, 'left'))
+        return tree
