@@ -55,3 +55,10 @@ La integración crea y elimina esquemas `test_*` dentro de esa base. No uses una
 Desde **Mapa → Reportar un hueco aquí**, una persona puede publicar un aviso con su GPS actual, descripción y riesgo indicado. Otras cuentas lo ven con un símbolo de hueco. **Activar alertas** muestra «Este hueco es peligroso, cuidado» al estar a menos de 200 m. Los avisos se actualizan cada 15 segundos con la aplicación abierta y GPS permitido. La distancia y el riesgo son orientativos.
 
 Consulta [COMUNIDAD.md](COMUNIDAD.md) para el contrato, privacidad, límites y pruebas. No se requiere una nueva migración.
+
+
+## Árboles de reportes
+
+BacheScan adapta los ejemplos de árbol binario del material docente Arboles.pdf. El BST permite ordenar, consultar intervalos y recorrer reportes por riesgo; la jerarquía de ubicaciones agrupa ciudad, barrio, vía y bache. La pantalla **Reportes → Abrir explorador de árboles** y la sección **Estructuras** muestran nodos, recorridos y métricas con datos guardados.
+
+Consulta [la guía de árboles](docs/ARBOLES.md) para el uso, la correspondencia con el PDF, los archivos, las restricciones y las pruebas. Las respuestas requieren sesión y representan una muestra explícita de hasta 200 reportes activos. PostgreSQL conserva la persistencia y no se requiere una migración adicional.
