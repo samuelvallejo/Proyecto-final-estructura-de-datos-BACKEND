@@ -154,3 +154,8 @@ def test_remove_root_with_right():
 def test_remove_internal_left_child():
     tree = example(); tree.remove(3); tree.remove(2)
     assert tree.root.left.key == 1 and tree.validate()
+
+
+def test_remove_internal_right_child():
+    tree = example(); tree.remove(6); tree.remove(7)
+    assert tree.root.right.key == 8 and tree.validate()
