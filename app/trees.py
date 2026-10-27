@@ -55,3 +55,14 @@ class BinarySearchTree(Generic[K, V]):
 
     def contains(self, key: K) -> bool:
         return self.find_node(key) is not None
+
+    def in_order(self) -> Iterator[TreeNode[K, V]]:
+        pending = []
+        current = self.root
+        while current is not None or pending:
+            while current is not None:
+                pending.append(current)
+                current = current.left
+            current = pending.pop()
+            yield current
+            current = current.right
