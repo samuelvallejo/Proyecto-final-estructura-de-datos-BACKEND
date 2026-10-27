@@ -208,3 +208,8 @@ def test_validate_weight_mismatch():
 def test_clear_and_reuse():
     tree = example(); tree.clear(); tree.insert(9,'nueve')
     assert len(tree) == 1 and tree.search(9) == 'nueve' and tree.validate()
+
+
+def test_composite_keys():
+    tree = BinarySearchTree(); tree.insert((70,1,'a'),'a'); tree.insert((70,1,'b'),'b')
+    assert len(tree) == 2 and [node.value for node in tree.in_order()] == ['a','b']
