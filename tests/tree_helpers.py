@@ -19,7 +19,7 @@ def seed_reports(client, scores):
             holes.append(dict(id=hole_id, lat=3.45 + i*.001, lng=-76.53, kind='BACHE', status='UNVERIFIED'))
             reports.append(dict(id=report_id, pothole_id=hole_id, session_id=session, accuracy=8, description='Prueba de árboles'))
             assessments.append(dict(pothole_id=hole_id, report_id=report_id, score=score,
-                level='HIGH' if score >= 60 else 'LOW', method='community'))
+                level='CRITICAL' if score >= 80 else 'HIGH' if score >= 60 else 'MEDIUM' if score >= 35 else 'LOW', method='community'))
         if holes:
             conn.execute(s.potholes.insert(), holes); conn.execute(s.reports.insert(), reports)
             conn.execute(s.risk_assessments.insert(), assessments)
