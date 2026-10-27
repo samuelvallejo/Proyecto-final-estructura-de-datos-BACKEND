@@ -50,3 +50,11 @@ def test_tree_api_traversals(client):
         assert set(body['binary']['traversal']['reportIds']) == set(ids)
         assert [r['id'] for r in body['reports']] == body['binary']['traversal']['reportIds']
         assert body['binary']['traversal']['order'] == order
+
+
+def test_tree_api_public_fields_only(client):
+    token(client); seed_reports(client,[70])
+    body = client.get(URL).json(); text = str(body)
+    assert body['reports'][0]['source'] == 'COMMUNITY'
+    for field in ['password_hash','session_id','user_id','email_lookup','token_hash','encrypted_details']:
+        assert field not in text
