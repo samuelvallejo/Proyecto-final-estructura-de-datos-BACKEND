@@ -45,3 +45,16 @@ class ReportRiskIndex:
     def search_path(self, report_id):
         report = self.by_id.get(report_id)
         return [node.value['id'] for node in self.tree.trace(report_key(report))] if report is not None else []
+
+    def snapshot(self, order='inorder'):
+        nodes = []
+        for node, level, parent in self.tree.level_order():
+            nodes.append({'id': node.value['id'], 'score': node.key[0],
+                'leftId': node.left.value['id'] if node.left is not None else None,
+                'rightId': node.right.value['id'] if node.right is not None else None,
+                'parentId': parent.value['id'] if parent is not None else None,
+                'level': level, 'degree': int(node.left is not None) + int(node.right is not None),
+                'isLeaf': node.left is None and node.right is None})
+        return {'rootId': self.tree.root.value['id'] if self.tree.root is not None else None,
+                'nodes': nodes, 'metrics': self.tree.metrics(),
+                'traversal': {'order': order, 'reportIds': [node.value['id'] for node in self.tree.traverse(order)]}}
