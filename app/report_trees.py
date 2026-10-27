@@ -115,3 +115,10 @@ class ReportPlaceTree:
             parent.children.append(leaf)
         for node in self.nodes.values():
             node.children.sort(key=lambda child: (place_key(child.label), child.id))
+
+    def walk(self):
+        pending = [(self.root, 1)]
+        while pending:
+            node, level = pending.pop()
+            yield node, level
+            pending.extend((child, level + 1) for child in reversed(node.children))
