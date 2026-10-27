@@ -105,3 +105,8 @@ def test_skewed_tree_without_recursion():
 
 def test_complete_metrics():
     assert example().metrics() == {'weight':7,'height':2,'levels':3,'leaves':4,'branches':2,'internalNodes':3,'order':2,'maxDegree':2}
+
+
+def test_root_not_a_branch():
+    tree = BinarySearchTree(); tree.insert(2,2); tree.insert(1,1)
+    assert tree.metrics()['branches'] == 0 and tree.metrics()['leaves'] == 1
