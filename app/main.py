@@ -301,6 +301,8 @@ def create_app(settings=None):
                 'array': {'use': 'Tensor NumPy NCHW de imagen y arrays de reportes paginados'},
                 'circularDoublyLinkedList': {'use': 'Recorrido circular de baches prioritarios: anterior y siguiente'},
                 'stack': {'use': 'Historial LIFO de navegación en el frontend'},
+                'binarySearchTree': {'use': 'Orden y rangos de riesgo; búsqueda y recorridos de reportes reales'},
+                'generalTree': {'use': 'Exploración jerárquica: ciudad, barrio, vía y bache'},
                 'persistence': 'PostgreSQL; las estructuras de ejecución son temporales por proceso'}
 
     return app
