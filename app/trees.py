@@ -232,3 +232,7 @@ class BinarySearchTree(Generic[K, V]):
             if node.left is not None:
                 pending.append((node.left, lower, node.key))
         return len(seen) == self.size
+
+    def clear(self):
+        self.root = None
+        self.size = 0
