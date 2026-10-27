@@ -380,3 +380,7 @@ def test_empty_places_tree():
 
 def test_missing_search_trace():
     assert keys(example().trace(4)) == [5,2,3]
+
+
+def test_root_trace():
+    assert keys(example().trace(5)) == [5]
