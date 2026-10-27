@@ -232,3 +232,8 @@ def test_queries_are_non_mutating():
     tree = example(); before = keys(tree.pre_order())
     list(tree.between(2,7)); tree.search(3); tree.trace(9); tree.metrics()
     assert keys(tree.pre_order()) == before and tree.validate()
+
+
+def test_report_index_duplicate_identity():
+    index = ReportRiskIndex([report('a',20),report('a',80)])
+    assert index.tree.size == 1 and index.ordered()[0]['hazardScore'] == 80
