@@ -90,3 +90,8 @@ def test_level_order_fifo():
 
 def test_empty_height():
     assert BinarySearchTree().height == -1 and BinarySearchTree().metrics()['levels'] == 0
+
+
+def test_single_height():
+    tree = BinarySearchTree(); tree.insert(1, 1)
+    assert tree.height == 0 and tree.metrics()['levels'] == 1
