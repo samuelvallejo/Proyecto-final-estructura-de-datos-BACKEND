@@ -176,7 +176,7 @@ class Repository:
         if position:
             query = query.where(s.potholes.c.lat.between(position['lat'] - radius / 110000, position['lat'] + radius / 110000))
         if priority:
-            query = query.order_by(s.risk_assessments.c.score.desc(), s.reports.c.created_at.desc(), s.reports.c.id)
+            query = query.order_by(s.risk_assessments.c.score.desc(), s.reports.c.created_at.desc(), s.reports.c.id.desc())
         else:
             query = query.order_by(s.reports.c.created_at.desc(), s.reports.c.id)
         if position:
@@ -235,5 +235,5 @@ class Repository:
             total = conn.execute(select(func.count()).select_from(active.subquery())).scalar_one()
             matched = conn.execute(select(func.count()).select_from(filtered.subquery())).scalar_one()
             rows = conn.execute(filtered.order_by(s.risk_assessments.c.score.desc(),
-                s.reports.c.created_at.desc(), s.reports.c.id).limit(limit)).mappings().all()
+                s.reports.c.created_at.desc(), s.reports.c.id.desc()).limit(limit)).mappings().all()
         return [self.serialize(row) for row in rows], total, matched
