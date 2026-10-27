@@ -139,3 +139,8 @@ def test_remove_right_leaf():
 def test_remove_single_root():
     tree = BinarySearchTree(); tree.insert(1,1); assert tree.remove(1)
     assert tree.root is None and len(tree) == 0 and tree.validate()
+
+
+def test_remove_root_with_left():
+    tree = BinarySearchTree(); tree.insert(2,2); tree.insert(1,1); tree.remove(2)
+    assert tree.root.key == 1 and tree.validate()
