@@ -384,3 +384,8 @@ def test_missing_search_trace():
 
 def test_root_trace():
     assert keys(example().trace(5)) == [5]
+
+
+def test_skewed_degree():
+    tree = BinarySearchTree.from_items([(1,1)]); tree.insert(2,2); tree.insert(3,3)
+    assert tree.metrics()['maxDegree'] == 1 and tree.metrics()['branches'] == 1
