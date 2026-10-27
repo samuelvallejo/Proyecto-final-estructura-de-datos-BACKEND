@@ -351,3 +351,8 @@ def test_place_ids_escape_path_boundaries():
 def test_places_duplicate_id():
     tree = ReportPlaceTree([report('a'),report('a',city='Bogotá')])
     assert tree.root.report_count == 1 and len([n for n in tree.nodes.values() if n.kind == 'report']) == 1
+
+
+def test_place_aggregates():
+    tree = ReportPlaceTree([report('a',20),report('b',90)])
+    assert all(n.report_count == 2 and n.highest_score == 90 for n in tree.nodes.values() if n.kind != 'report')
