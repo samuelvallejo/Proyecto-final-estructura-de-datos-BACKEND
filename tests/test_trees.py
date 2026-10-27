@@ -51,3 +51,8 @@ def test_search_right_descendant():
 
 def test_search_absent():
     tree = example(); assert tree.search(4) is None and not tree.contains(4)
+
+
+def test_contains_none_value():
+    tree = BinarySearchTree(); tree.insert(1, None)
+    assert tree.contains(1) and tree.search(1) is None
