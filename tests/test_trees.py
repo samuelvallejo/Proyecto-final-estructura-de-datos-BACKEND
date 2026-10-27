@@ -193,3 +193,8 @@ def test_rebalance_preserves_values():
 def test_validate_corrupt_order():
     tree = example(); tree.root.left.right.key = 99
     assert not tree.validate()
+
+
+def test_validate_cycle():
+    tree = example(); tree.root.left.left = tree.root
+    assert not tree.validate()
