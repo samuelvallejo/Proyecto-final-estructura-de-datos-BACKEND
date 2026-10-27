@@ -149,3 +149,8 @@ def test_remove_root_with_left():
 def test_remove_root_with_right():
     tree = BinarySearchTree(); tree.insert(1,1); tree.insert(2,2); tree.remove(1)
     assert tree.root.key == 2 and tree.validate()
+
+
+def test_remove_internal_left_child():
+    tree = example(); tree.remove(3); tree.remove(2)
+    assert tree.root.left.key == 1 and tree.validate()
