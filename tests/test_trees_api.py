@@ -58,3 +58,13 @@ def test_tree_api_public_fields_only(client):
     assert body['reports'][0]['source'] == 'COMMUNITY'
     for field in ['password_hash','session_id','user_id','email_lookup','token_hash','encrypted_details']:
         assert field not in text
+
+
+def test_tree_api_is_read_only(client):
+    token(client); seed_reports(client,[30,60])
+    with client.app.state.engine.connect() as conn:
+        before = conn.execute(select(func.count()).select_from(s.audit_events)).scalar_one()
+    client.get(URL); client.get(URL+'?order=level')
+    with client.app.state.engine.connect() as conn:
+        assert conn.execute(select(func.count()).select_from(s.reports)).scalar_one() == 2
+        assert conn.execute(select(func.count()).select_from(s.audit_events)).scalar_one() == before
