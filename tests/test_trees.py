@@ -203,3 +203,8 @@ def test_validate_cycle():
 def test_validate_weight_mismatch():
     tree = example(); tree.size += 1
     assert not tree.validate()
+
+
+def test_clear_and_reuse():
+    tree = example(); tree.clear(); tree.insert(9,'nueve')
+    assert len(tree) == 1 and tree.search(9) == 'nueve' and tree.validate()
