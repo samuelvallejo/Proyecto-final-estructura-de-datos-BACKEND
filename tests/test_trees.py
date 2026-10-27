@@ -118,3 +118,7 @@ def test_range_inclusive():
 
 def test_range_outside():
     assert list(example().between(20,30)) == []
+
+
+def test_range_reversed():
+    with pytest.raises(ValueError): list(example().between(7,2))
