@@ -181,3 +181,10 @@ def test_balanced_bulk_build():
 def test_bulk_duplicates_last_value():
     tree = BinarySearchTree.from_items([(2,'a'),(1,'b'),(2,'c')])
     assert len(tree) == 2 and tree.search(2) == 'c'
+
+
+def test_rebalance_preserves_values():
+    tree = BinarySearchTree()
+    for n in range(30): tree.insert(n,str(n))
+    before = [(node.key,node.value) for node in tree.in_order()]; tree.rebalance()
+    assert tree.height == 4 and [(node.key,node.value) for node in tree.in_order()] == before
