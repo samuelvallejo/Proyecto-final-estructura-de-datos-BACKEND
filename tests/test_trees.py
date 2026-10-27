@@ -77,3 +77,8 @@ def test_preorder():
 
 def test_postorder():
     assert keys(example().post_order()) == [1, 3, 2, 6, 8, 7, 5]
+
+
+def test_root_level_and_parent():
+    root, level, parent = next(example().level_order())
+    assert root.key == 5 and level == 1 and parent is None
