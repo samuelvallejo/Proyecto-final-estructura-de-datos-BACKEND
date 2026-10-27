@@ -101,3 +101,7 @@ def test_skewed_tree_without_recursion():
     tree = BinarySearchTree()
     for value in range(1300): tree.insert(value, value)
     assert tree.height == 1299 and len(list(tree.post_order())) == 1300 and tree.validate()
+
+
+def test_complete_metrics():
+    assert example().metrics() == {'weight':7,'height':2,'levels':3,'leaves':4,'branches':2,'internalNodes':3,'order':2,'maxDegree':2}
