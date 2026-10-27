@@ -188,3 +188,8 @@ def test_rebalance_preserves_values():
     for n in range(30): tree.insert(n,str(n))
     before = [(node.key,node.value) for node in tree.in_order()]; tree.rebalance()
     assert tree.height == 4 and [(node.key,node.value) for node in tree.in_order()] == before
+
+
+def test_validate_corrupt_order():
+    tree = example(); tree.root.left.right.key = 99
+    assert not tree.validate()
