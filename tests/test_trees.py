@@ -361,3 +361,9 @@ def test_place_aggregates():
 def test_place_levels_and_height():
     tree = ReportPlaceTree([report()]); metrics = tree.metrics()
     assert metrics['height'] == 4 and metrics['levels'] == 5 and metrics['weight'] == 5 and metrics['reports'] == 1
+
+
+def test_place_path():
+    tree = ReportPlaceTree([report()])
+    assert [n.kind for n in tree.path_to('report-a')] == ['root','city','neighborhood','street','report']
+    assert tree.path_to('missing') == []
