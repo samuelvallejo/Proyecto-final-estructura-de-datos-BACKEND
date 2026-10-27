@@ -139,3 +139,10 @@ class ReportPlaceTree:
             result.append(self.nodes[node_id])
             node_id = self.parents.get(node_id)
         return list(reversed(result))
+
+    def snapshot(self):
+        return {'rootId': self.root.id, 'metrics': self.metrics(), 'nodes': [
+            {'id': node.id, 'label': node.label, 'kind': node.kind, 'level': level,
+             'parentId': self.parents.get(node.id), 'childIds': [child.id for child in node.children],
+             'reportId': node.report_id, 'reportCount': node.report_count, 'highestScore': node.highest_score}
+            for node, level in self.walk()]}
