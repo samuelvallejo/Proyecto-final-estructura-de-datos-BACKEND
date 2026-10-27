@@ -20,6 +20,7 @@ from .structures import CircularDoublyLinkedList
 from . import schema as s
 from .auth import router as auth_router, Vault, password_hash, scan_owner, current_session
 from .trips import router as trip_router, validate_scan_trip, link_reports
+from .community import router as community_router
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ def create_app(settings=None):
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.include_router(auth_router)
     app.include_router(trip_router)
+    app.include_router(community_router)
     app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()],
                        allow_credentials=True, allow_methods=['GET', 'POST'],
                        allow_headers=['Content-Type'], expose_headers=['Retry-After'])
@@ -86,7 +88,7 @@ def create_app(settings=None):
             origins = {origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()}
             if request.headers.get('origin') not in origins:
                 return JSONResponse({'error': 'No se pudo completar la operación.'}, status_code=403)
-        if (request.url.path.startswith('/api/auth/') or request.url.path.startswith('/api/trips')) and request.method == 'POST':
+        if (request.url.path.startswith('/api/auth/') or request.url.path.startswith('/api/trips') or request.url.path.startswith('/api/community/')) and request.method == 'POST':
             length = request.headers.get('content-length', '0')
             if not length.isdigit() or int(length) > 8192:
                 return JSONResponse({'error': 'No se pudo completar la operación.'}, status_code=413)

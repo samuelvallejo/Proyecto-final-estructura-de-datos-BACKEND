@@ -144,19 +144,24 @@ class Repository:
     def query(self):
         return select(s.reports.c.id, s.reports.c.created_at, s.reports.c.accuracy,
                       s.potholes.c.lat, s.potholes.c.lng, s.potholes.c.status,
-                      s.analyses.c.result, s.zones.c.address, s.zones.c.source,
+                      s.analyses.c.result, s.zones.c.address, s.zones.c.source, s.reports.c.description,
+                      s.risk_assessments.c.score, s.risk_assessments.c.level, s.risk_assessments.c.method,
                       s.roads.c.name.label('street'), s.neighborhoods.c.name.label('neighborhood'), s.cities.c.name.label('city'))\
             .select_from(s.reports.join(s.potholes, s.reports.c.pothole_id == s.potholes.c.id)
                          .outerjoin(s.detections, s.reports.c.detection_id == s.detections.c.id)
                          .outerjoin(s.analyses, s.detections.c.analysis_id == s.analyses.c.id)
+                         .outerjoin(s.risk_assessments, s.risk_assessments.c.report_id == s.reports.c.id)
                          .outerjoin(s.zones, s.potholes.c.zone_id == s.zones.c.id)
                          .outerjoin(s.roads, s.zones.c.road_id == s.roads.c.id)
                          .outerjoin(s.neighborhoods, s.zones.c.neighborhood_id == s.neighborhoods.c.id)
                          .outerjoin(s.cities, s.zones.c.city_id == s.cities.c.id))
 
     def serialize(self, row):
-        original = row['result'].get('legacyZone', {})
-        return {**row['result'], 'id': row['id'], 'timestamp': row['created_at'], 'status': row['status'],
+        result = row['result'] or {'isPothole': True, 'potholeType': 'BACHE',
+            'hazardScore': row['score'], 'hazardLevel': row['level'],
+            'aiDescription': row['description'], 'riskFactors': ['Riesgo indicado por la comunidad; sin verificar']}
+        original = result.get('legacyZone', {})
+        return {**result, 'source': 'COMMUNITY' if row['method'] == 'community' else 'YOLO', 'id': row['id'], 'timestamp': row['created_at'], 'status': row['status'],
                 'location': {'lat': row['lat'], 'lng': row['lng'], 'accuracy': row['accuracy']},
                 'zone': {'street': row['street'] or original.get('street'), 'neighborhood': row['neighborhood'] or original.get('neighborhood'), 'city': row['city'] or original.get('city'),
                          'fullAddress': row['address'] or None, 'source': row['source']}}
@@ -167,19 +172,58 @@ class Repository:
         return self.serialize(row) if row else None
 
     def list_reports(self, limit=100, offset=0, priority=False, position=None, radius=5000):
-        query = self.query()
+        query = self.query().where(s.potholes.c.status.not_in(['REPAIRED', 'REJECTED']))
         if position:
             query = query.where(s.potholes.c.lat.between(position['lat'] - radius / 110000, position['lat'] + radius / 110000))
         if priority:
-            query = query.join(s.risk_assessments, s.risk_assessments.c.report_id == s.reports.c.id)
             query = query.order_by(s.risk_assessments.c.score.desc(), s.reports.c.created_at.desc(), s.reports.c.id)
         else:
             query = query.order_by(s.reports.c.created_at.desc(), s.reports.c.id)
+        if position:
+            # Latitude prefilter uses ix_potholes_location. SQL orders by true distance
+            # before pagination, so the closest warning cannot be hidden by recent reports.
+            lat = func.radians(s.potholes.c.lat)
+            delta_lat = (lat - math.radians(position['lat'])) / 2
+            delta_lng = func.radians(s.potholes.c.lng - position['lng']) / 2
+            hav = func.pow(func.sin(delta_lat), 2) + math.cos(math.radians(position['lat'])) * func.cos(lat) * func.pow(func.sin(delta_lng), 2)
+            meters = 12742000 * func.asin(func.sqrt(func.least(1.0, func.greatest(0.0, hav))))
+            query = query.where(meters <= radius).order_by(None).order_by(meters, s.reports.c.id)
         with self.engine.connect() as conn:
-            if position:
-                rows = conn.execute(query).mappings()
-                results = [self.serialize(row) for row in rows if distance(row, position) <= radius]
-                return results[offset:offset + limit], len(results)
-            total = conn.execute(select(func.count()).select_from(s.reports)).scalar_one()
+            total = conn.execute(select(func.count()).select_from(query.order_by(None).subquery())).scalar_one()
             rows = conn.execute(query.limit(limit).offset(offset)).mappings().all()
         return [self.serialize(row) for row in rows], total
+
+    def save_community_report(self, session, payload, zone):
+        position = payload.position
+        with self.engine.begin() as conn:
+            # Serialize duplicate checks and limits across all replicas.
+            conn.execute(text('SELECT pg_advisory_xact_lock(771012)'))
+            recent = conn.execute(select(func.count()).select_from(s.reports.join(s.sessions).join(s.devices)
+                .join(s.risk_assessments, s.risk_assessments.c.report_id == s.reports.c.id))
+                .where(s.devices.c.user_id == session['user_id'], s.risk_assessments.c.method == 'community',
+                       s.reports.c.created_at > s.now() - 600000)).scalar_one()
+            if recent >= 10:
+                raise HTTPException(429, 'Espera unos minutos antes de publicar otro aviso.')
+            candidates = conn.execute(select(s.potholes).where(
+                s.potholes.c.lat.between(position.lat - 20 / 110000, position.lat + 20 / 110000),
+                s.potholes.c.status.not_in(['REPAIRED', 'REJECTED']))).mappings()
+            match = next((row for row in candidates if distance(row, position.model_dump()) <= 20), None)
+            if match:
+                report_id = conn.execute(select(s.reports.c.id).where(s.reports.c.pothole_id == match['id'])
+                    .order_by(s.reports.c.created_at.desc(), s.reports.c.id).limit(1)).scalar_one()
+                existing = True
+            else:
+                zone_id = self.zone(conn, zone)
+                pothole_id = conn.execute(s.potholes.insert().values(zone_id=zone_id, lat=position.lat,
+                    lng=position.lng, kind='BACHE', status='UNVERIFIED').returning(s.potholes.c.id)).scalar_one()
+                report_id = conn.execute(s.reports.insert().values(pothole_id=pothole_id,
+                    session_id=session['id'], accuracy=position.accuracy, description=payload.description)
+                    .returning(s.reports.c.id)).scalar_one()
+                conn.execute(s.risk_assessments.insert().values(report_id=report_id, pothole_id=pothole_id,
+                    score={'MEDIUM': 45, 'HIGH': 70, 'CRITICAL': 90}[payload.risk], level=payload.risk, method='community'))
+                conn.execute(s.status_events.insert().values(pothole_id=pothole_id, old_status='NEW',
+                    new_status='UNVERIFIED', reason='Aviso comunitario pendiente de verificación'))
+                conn.execute(s.audit_events.insert().values(session_id=session['id'], action='community.report.created',
+                    entity_id=report_id, details={'locationSource': 'phone-gps'}))
+                existing = False
+        return self.get_report(report_id), existing

@@ -48,3 +48,10 @@ pytest -q
 ```
 
 La integración crea y elimina esquemas `test_*` dentro de esa base. No uses una base de producción. Las imágenes de prueba y sus atribuciones se guardan en `tests/fixtures/`.
+
+
+## Avisos comunitarios y alertas de cercanía
+
+Desde **Mapa → Reportar un hueco aquí**, una persona puede publicar un aviso con su GPS actual, descripción y riesgo indicado. Otras cuentas lo ven con un símbolo de hueco. **Activar alertas** muestra «Este hueco es peligroso, cuidado» al estar a menos de 200 m. Los avisos se actualizan cada 15 segundos con la aplicación abierta y GPS permitido. La distancia y el riesgo son orientativos.
+
+Consulta [COMUNIDAD.md](COMUNIDAD.md) para el contrato, privacidad, límites y pruebas. No se requiere una nueva migración.
