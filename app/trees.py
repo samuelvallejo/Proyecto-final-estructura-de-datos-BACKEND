@@ -166,3 +166,27 @@ class BinarySearchTree(Generic[K, V]):
                 break
             yield current
             current = current.right
+
+    def remove(self, key: K) -> bool:
+        parent = None
+        current = self.root
+        while current is not None and current.key != key:
+            parent = current
+            current = current.left if key < current.key else current.right
+        if current is None:
+            return False
+        if current.left is not None and current.right is not None:
+            successor_parent, successor = current, current.right
+            while successor.left is not None:
+                successor_parent, successor = successor, successor.left
+            current.key, current.value = successor.key, successor.value
+            parent, current = successor_parent, successor
+        child = current.left if current.left is not None else current.right
+        if parent is None:
+            self.root = child
+        elif parent.left is current:
+            parent.left = child
+        else:
+            parent.right = child
+        self.size -= 1
+        return True
