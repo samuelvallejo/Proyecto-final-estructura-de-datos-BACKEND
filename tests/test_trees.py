@@ -130,3 +130,7 @@ def test_remove_absent():
 
 def test_remove_left_leaf():
     tree = example(); assert tree.remove(1) and tree.root.left.left is None and tree.validate()
+
+
+def test_remove_right_leaf():
+    tree = example(); assert tree.remove(8) and tree.root.right.right is None and tree.validate()
