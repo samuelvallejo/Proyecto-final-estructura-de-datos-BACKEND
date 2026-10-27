@@ -214,3 +214,7 @@ class BinarySearchTree(Generic[K, V]):
             tasks.append((middle + 1, last, node, 'right'))
             tasks.append((first, middle, node, 'left'))
         return tree
+
+    def rebalance(self):
+        rebuilt = self.from_items((node.key, node.value) for node in self.in_order())
+        self.root, self.size = rebuilt.root, rebuilt.size
