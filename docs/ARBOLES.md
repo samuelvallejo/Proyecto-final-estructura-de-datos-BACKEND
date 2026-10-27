@@ -38,3 +38,8 @@ Los recorridos son iterativos. Por niveles se reutiliza la cola enlazada existen
 El peso cuenta todos los nodos. El nivel de la raíz es 1. La altura cuenta aristas del camino más largo: un solo nodo tiene altura 0. Para el árbol binario vacío se usa altura -1, cero niveles y cero hojas.
 
 Una hoja no tiene hijos. Una rama tiene hijos y no es la raíz. Los nodos internos incluyen a la raíz cuando tiene hijos. El orden del árbol binario es 2 y el grado de cada nodo está entre 0 y 2. El árbol geográfico tiene tantos hijos como grupos requiera cada ubicación.
+## Construcción de instantáneas
+
+`from_items` ordena las claves, aplica la última escritura para claves repetidas y conecta los puntos medios con sus hijos. La ordenación cuesta O(n log n); la conexión posterior cuesta O(n). La altura de una instantánea de 200 nodos es como máximo 7.
+
+Esta construcción no transforma la clase en un AVL: no hay rotaciones automáticas al insertar posteriormente. `rebalance` reconstruye explícitamente una instantánea y conserva claves y valores. Las pruebas incluyen árboles profundos para comprobar que las operaciones iterativas no dependen del límite de recursión de Python.
