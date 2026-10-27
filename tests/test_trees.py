@@ -95,3 +95,9 @@ def test_empty_height():
 def test_single_height():
     tree = BinarySearchTree(); tree.insert(1, 1)
     assert tree.height == 0 and tree.metrics()['levels'] == 1
+
+
+def test_skewed_tree_without_recursion():
+    tree = BinarySearchTree()
+    for value in range(1300): tree.insert(value, value)
+    assert tree.height == 1299 and len(list(tree.post_order())) == 1300 and tree.validate()
