@@ -74,3 +74,9 @@ class PlaceNode:
 def place_key(value):
     text = ' '.join((value or '').split()).casefold()
     return ''.join(char for char in unicodedata.normalize('NFKD', text) if not unicodedata.combining(char))
+
+
+def place_id(path):
+    # Longitudes evitan colisiones por separadores dentro de nombres de calles.
+    encoded = ''.join(f'{len(part)}:{part}' for part in path)
+    return 'place-' + sha256(encoded.encode('utf-8')).hexdigest()[:24]
