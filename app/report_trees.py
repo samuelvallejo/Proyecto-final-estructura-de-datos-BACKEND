@@ -36,3 +36,8 @@ class ReportRiskIndex:
 
     def ordered(self, order='descending'):
         return [node.value for node in self.tree.traverse(order)]
+
+    def in_range(self, minimum=0, maximum=100):
+        if not 0 <= minimum <= maximum <= 100:
+            raise ValueError('Rango de riesgo inválido')
+        return [node.value for node in self.tree.between((minimum, -math.inf, ''), (maximum, math.inf, chr(0x10ffff)))]
