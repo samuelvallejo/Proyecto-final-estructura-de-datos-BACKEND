@@ -22,3 +22,7 @@ def test_empty_root_and_weight():
 def test_first_insert_is_root():
     tree = BinarySearchTree(); assert tree.insert(5, 'raíz')
     assert tree.root.key == 5 and tree.root.value == 'raíz' and len(tree) == 1
+
+
+def test_insert_left():
+    tree = example(); assert tree.root.left.key == 2 and tree.root.left.left.key == 1
