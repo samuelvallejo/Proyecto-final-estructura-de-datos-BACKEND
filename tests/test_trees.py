@@ -311,3 +311,8 @@ def test_invalid_report_ids():
 
 def test_invalid_report_range():
     with pytest.raises(ValueError): ReportRiskIndex().in_range(90,10)
+
+
+def test_empty_report_snapshot():
+    value = ReportRiskIndex().snapshot()
+    assert value['rootId'] is None and value['nodes'] == [] and value['traversal']['reportIds'] == []
