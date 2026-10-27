@@ -286,3 +286,9 @@ def test_binary_snapshot_links():
     for node in nodes.values():
         for child in [node['leftId'],node['rightId']]:
             if child is not None: assert nodes[child]['parentId'] == node['id'] and nodes[child]['level'] == node['level']+1
+
+
+def test_binary_snapshot_excludes_private_fields():
+    value = report(); value['session_id'] = 'secret'; value['email'] = 'private@example.invalid'
+    snapshot = str(ReportRiskIndex([value]).snapshot())
+    assert 'secret' not in snapshot and 'private@example.invalid' not in snapshot and 'session_id' not in snapshot
