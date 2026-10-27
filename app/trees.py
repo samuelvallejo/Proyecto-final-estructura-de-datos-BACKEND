@@ -66,3 +66,14 @@ class BinarySearchTree(Generic[K, V]):
             current = pending.pop()
             yield current
             current = current.right
+
+    def reverse_order(self) -> Iterator[TreeNode[K, V]]:
+        pending = []
+        current = self.root
+        while current is not None or pending:
+            while current is not None:
+                pending.append(current)
+                current = current.right
+            current = pending.pop()
+            yield current
+            current = current.left
