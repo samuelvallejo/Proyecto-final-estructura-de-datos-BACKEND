@@ -69,3 +69,8 @@ class PlaceNode:
     children: list['PlaceNode'] = field(default_factory=list)
     report_count: int = 0
     highest_score: int = 0
+
+
+def place_key(value):
+    text = ' '.join((value or '').split()).casefold()
+    return ''.join(char for char in unicodedata.normalize('NFKD', text) if not unicodedata.combining(char))
