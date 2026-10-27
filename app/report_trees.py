@@ -80,3 +80,38 @@ def place_id(path):
     # Longitudes evitan colisiones por separadores dentro de nombres de calles.
     encoded = ''.join(f'{len(part)}:{part}' for part in path)
     return 'place-' + sha256(encoded.encode('utf-8')).hexdigest()[:24]
+
+
+class ReportPlaceTree:
+    def __init__(self, reports=()):
+        self.root = PlaceNode('places-root', 'Reportes viales', 'root')
+        self.nodes = {self.root.id: self.root}
+        self.parents = {}
+        unique = {report['id']: report for report in reports}
+        for report in sorted(unique.values(), key=lambda item: item['id']):
+            parent = self.root
+            path = []
+            score = report_key(report)[0]
+            parent.report_count += 1
+            parent.highest_score = max(parent.highest_score, score)
+            for kind, fallback in [('city', 'Ciudad sin identificar'), ('neighborhood', 'Barrio sin identificar'), ('street', 'Vía sin identificar')]:
+                raw = report['zone'].get(kind)
+                label = ' '.join(raw.split()) if raw and raw.strip() else fallback
+                path.append(kind + ':' + (place_key(raw) if raw and raw.strip() else '~unknown'))
+                identity = place_id(path)
+                child = self.nodes.get(identity)
+                if child is None:
+                    child = PlaceNode(identity, label, kind)
+                    self.nodes[identity] = child
+                    self.parents[identity] = parent.id
+                    parent.children.append(child)
+                child.report_count += 1
+                child.highest_score = max(child.highest_score, score)
+                parent = child
+            identity = 'report-' + report['id']
+            leaf = PlaceNode(identity, f"Bache · Riesgo {score}/100", 'report', report['id'], report_count=1, highest_score=score)
+            self.nodes[identity] = leaf
+            self.parents[identity] = parent.id
+            parent.children.append(leaf)
+        for node in self.nodes.values():
+            node.children.sort(key=lambda child: (place_key(child.label), child.id))
