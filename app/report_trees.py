@@ -29,3 +29,7 @@ class ReportRiskIndex:
             self.tree.remove(report_key(previous))
         self.by_id[report['id']] = report
         self.tree.insert(key, report)
+
+    def remove(self, report_id):
+        previous = self.by_id.pop(report_id, None)
+        return self.tree.remove(report_key(previous)) if previous is not None else False
