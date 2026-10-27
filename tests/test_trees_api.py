@@ -75,3 +75,13 @@ def test_tree_api_two_accounts(client):
     token(client); second = client.get(URL).json()
     assert {r['id'] for r in second['reports']} == set(ids)
     assert second['binary'] == first['binary'] and second['geography'] == first['geography']
+
+
+def test_tree_api_excludes_inactive(client):
+    token(client); ids = seed_reports(client,[60,70,80])
+    with client.app.state.engine.begin() as conn:
+        holes = dict(conn.execute(select(s.reports.c.id,s.reports.c.pothole_id)).all())
+        conn.execute(update(s.potholes).where(s.potholes.c.id == holes[ids[0]]).values(status='REPAIRED'))
+        conn.execute(update(s.potholes).where(s.potholes.c.id == holes[ids[1]]).values(status='REJECTED'))
+    body = client.get(URL).json()
+    assert [r['id'] for r in body['reports']] == [ids[2]] and body['scope']['totalReports'] == 1
