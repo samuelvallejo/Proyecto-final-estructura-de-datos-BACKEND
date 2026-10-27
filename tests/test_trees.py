@@ -213,3 +213,12 @@ def test_clear_and_reuse():
 def test_composite_keys():
     tree = BinarySearchTree(); tree.insert((70,1,'a'),'a'); tree.insert((70,1,'b'),'b')
     assert len(tree) == 2 and [node.value for node in tree.in_order()] == ['a','b']
+
+
+def test_random_mutations_preserve_bst():
+    rng = random.Random(315); tree = BinarySearchTree(); expected = {}
+    for _ in range(500):
+        key = rng.randrange(100)
+        if rng.random() < .6: expected[key] = key*2; tree.insert(key,key*2)
+        else: expected.pop(key,None); tree.remove(key)
+        assert tree.validate() and [(n.key,n.value) for n in tree.in_order()] == sorted(expected.items())
