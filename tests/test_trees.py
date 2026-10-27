@@ -176,3 +176,8 @@ def test_remove_deep_successor_preserves_its_child():
 def test_balanced_bulk_build():
     tree = BinarySearchTree.from_items((n,n) for n in range(200))
     assert tree.height == 7 and tree.validate() and len(tree) == 200
+
+
+def test_bulk_duplicates_last_value():
+    tree = BinarySearchTree.from_items([(2,'a'),(1,'b'),(2,'c')])
+    assert len(tree) == 2 and tree.search(2) == 'c'
