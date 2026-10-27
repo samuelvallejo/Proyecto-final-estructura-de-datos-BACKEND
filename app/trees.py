@@ -40,3 +40,11 @@ class BinarySearchTree(Generic[K, V]):
                 self.size += 1
                 return True
             current = child
+
+    def find_node(self, key: K) -> TreeNode[K, V] | None:
+        current = self.root
+        while current is not None:
+            if key == current.key:
+                return current
+            current = current.left if key < current.key else current.right
+        return None
