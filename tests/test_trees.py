@@ -336,3 +336,8 @@ def test_neighborhoods_keep_city_scope():
 def test_streets_keep_neighborhood_scope():
     tree = ReportPlaceTree([report('a',neighborhood='Centro'),report('b',neighborhood='Norte')])
     assert len([node for node in tree.nodes.values() if node.kind == 'street']) == 2
+
+
+def test_unknown_and_real_fallback_label_are_distinct():
+    tree = ReportPlaceTree([report('a',city=None),report('b',city='Ciudad sin identificar')])
+    assert len(tree.root.children) == 2
