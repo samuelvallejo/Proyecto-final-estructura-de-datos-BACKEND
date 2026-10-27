@@ -257,3 +257,9 @@ def test_report_risk_order():
 def test_report_upsert_moves_key():
     index = ReportRiskIndex([report('a',20),report('b',60)]); index.upsert(report('a',90))
     assert [r['id'] for r in index.ordered()] == ['a','b'] and index.tree.size == 2
+
+
+def test_invalid_upsert_preserves_previous():
+    index = ReportRiskIndex([report('a',20)])
+    with pytest.raises(ValueError): index.upsert(report('a',101))
+    assert index.ordered()[0]['hazardScore'] == 20
