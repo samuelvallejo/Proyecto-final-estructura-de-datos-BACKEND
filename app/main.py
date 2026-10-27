@@ -21,6 +21,7 @@ from . import schema as s
 from .auth import router as auth_router, Vault, password_hash, scan_owner, current_session
 from .trips import router as trip_router, validate_scan_trip, link_reports
 from .community import router as community_router
+from .tree_api import router as tree_router
 
 logger = logging.getLogger(__name__)
 
