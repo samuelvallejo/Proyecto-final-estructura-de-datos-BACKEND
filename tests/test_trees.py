@@ -372,3 +372,7 @@ def test_place_path():
 def test_places_stable_input_order():
     values = [report('b',city='Cali'),report('a',city='BOGOTÁ')]
     assert ReportPlaceTree(values).snapshot() == ReportPlaceTree(reversed(values)).snapshot()
+
+
+def test_empty_places_tree():
+    tree = ReportPlaceTree(); assert tree.metrics()['reports'] == 0 and tree.metrics()['weight'] == 1 and tree.metrics()['height'] == 0
