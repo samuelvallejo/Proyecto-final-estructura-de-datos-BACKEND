@@ -239,3 +239,6 @@ class BinarySearchTree(Generic[K, V]):
 
     def __len__(self):
         return self.size
+
+    def __bool__(self):
+        return self.root is not None
