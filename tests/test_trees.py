@@ -302,3 +302,8 @@ def test_invalid_scores():
 def test_invalid_timestamps():
     for value in [-1, float('inf'), True]:
         with pytest.raises(ValueError): report_key(report(timestamp=value))
+
+
+def test_invalid_report_ids():
+    for value in ['',None,12]:
+        with pytest.raises(ValueError): report_key(report(identity=value))
