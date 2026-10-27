@@ -346,3 +346,8 @@ def test_unknown_and_real_fallback_label_are_distinct():
 def test_place_ids_escape_path_boundaries():
     assert place_id(['a:b','c']) != place_id(['a','b:c'])
     assert place_key('  BOGOTÁ   Norte ') == 'bogota norte'
+
+
+def test_places_duplicate_id():
+    tree = ReportPlaceTree([report('a'),report('a',city='Bogotá')])
+    assert tree.root.report_count == 1 and len([n for n in tree.nodes.values() if n.kind == 'report']) == 1
