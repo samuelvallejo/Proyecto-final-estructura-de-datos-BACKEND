@@ -15,3 +15,9 @@ def report_key(report):
     if not isinstance(identity, str) or not identity:
         raise ValueError('Identificador inválido')
     return score, timestamp, identity
+
+
+class ReportRiskIndex:
+    def __init__(self, reports=()):
+        self.by_id = {report['id']: report for report in reports}
+        self.tree = BinarySearchTree.from_items((report_key(report), report) for report in self.by_id.values())
