@@ -35,3 +35,7 @@ def test_insert_right():
 def test_equal_key_updates_value():
     tree = example(); assert not tree.insert(3, 'nuevo')
     assert tree.search(3) == 'nuevo' and len(tree) == 7
+
+
+def test_search_root():
+    assert example().search(5) == '5'
