@@ -16,3 +16,9 @@ class TreeNode(Generic[K, V]):
     value: V
     left: 'TreeNode[K, V] | None' = None
     right: 'TreeNode[K, V] | None' = None
+
+
+class BinarySearchTree(Generic[K, V]):
+    def __init__(self):
+        self.root: TreeNode[K, V] | None = None
+        self.size = 0
