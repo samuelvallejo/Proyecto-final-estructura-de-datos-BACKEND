@@ -321,3 +321,8 @@ def test_empty_report_snapshot():
 def test_places_unknown_labels():
     tree = ReportPlaceTree([report(city=None,neighborhood=None,street=None)])
     assert {'Ciudad sin identificar','Barrio sin identificar','Vía sin identificar'} <= {node.label for node in tree.nodes.values()}
+
+
+def test_places_normalization():
+    tree = ReportPlaceTree([report('a',city=' Bogotá '),report('b',city='BOGOTA')])
+    assert len(tree.root.children) == 1 and tree.root.children[0].report_count == 2
