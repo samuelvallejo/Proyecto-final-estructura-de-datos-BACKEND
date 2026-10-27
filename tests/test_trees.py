@@ -331,3 +331,8 @@ def test_places_normalization():
 def test_neighborhoods_keep_city_scope():
     tree = ReportPlaceTree([report('a',city='Cali'),report('b',city='Bogotá')])
     assert len([node for node in tree.nodes.values() if node.kind == 'neighborhood']) == 2
+
+
+def test_streets_keep_neighborhood_scope():
+    tree = ReportPlaceTree([report('a',neighborhood='Centro'),report('b',neighborhood='Norte')])
+    assert len([node for node in tree.nodes.values() if node.kind == 'street']) == 2
