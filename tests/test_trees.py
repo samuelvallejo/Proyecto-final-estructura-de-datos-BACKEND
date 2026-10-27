@@ -69,3 +69,7 @@ def test_pdf_inorder_example():
 
 def test_reverse_order():
     assert keys(example().reverse_order()) == [8, 7, 6, 5, 3, 2, 1]
+
+
+def test_preorder():
+    assert keys(example().pre_order()) == [5, 2, 1, 3, 7, 6, 8]
