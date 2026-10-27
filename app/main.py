@@ -59,6 +59,7 @@ def create_app(settings=None):
     app.include_router(auth_router)
     app.include_router(trip_router)
     app.include_router(community_router)
+    app.include_router(tree_router)
     app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()],
                        allow_credentials=True, allow_methods=['GET', 'POST'],
                        allow_headers=['Content-Type'], expose_headers=['Retry-After'])
