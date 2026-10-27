@@ -278,3 +278,11 @@ def test_report_range_zero_and_hundred():
 def test_report_search_path():
     index = ReportRiskIndex(report(str(n),n) for n in range(7)); path = index.search_path('1')
     assert path[0] == index.tree.root.value['id'] and path[-1] == '1' and index.search_path('missing') == []
+
+
+def test_binary_snapshot_links():
+    snapshot = ReportRiskIndex(report(str(n),n) for n in range(7)).snapshot()
+    nodes = {node['id']:node for node in snapshot['nodes']}
+    for node in nodes.values():
+        for child in [node['leftId'],node['rightId']]:
+            if child is not None: assert nodes[child]['parentId'] == node['id'] and nodes[child]['level'] == node['level']+1
