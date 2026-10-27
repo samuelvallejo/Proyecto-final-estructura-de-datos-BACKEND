@@ -307,3 +307,7 @@ def test_invalid_timestamps():
 def test_invalid_report_ids():
     for value in ['',None,12]:
         with pytest.raises(ValueError): report_key(report(identity=value))
+
+
+def test_invalid_report_range():
+    with pytest.raises(ValueError): ReportRiskIndex().in_range(90,10)
