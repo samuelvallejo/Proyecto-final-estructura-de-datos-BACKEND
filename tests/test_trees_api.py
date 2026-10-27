@@ -33,3 +33,11 @@ def test_tree_api_invalid_parameters(client):
     for query in ['minScore=-1','maxScore=101','minScore=90&maxScore=20','limit=201','limit=0','order=internal-secret-value']:
         response = client.get(URL+'?'+query)
         assert response.status_code == 422 and 'internal-secret-value' not in response.text
+
+
+def test_tree_api_bounded_sample(client):
+    token(client); seed_reports(client,[i%101 for i in range(205)])
+    body = client.get(URL).json()
+    assert body['scope']['loaded'] == len(body['binary']['nodes']) == 200
+    assert body['scope']['totalMatched'] == 205 and body['scope']['hasMore']
+    assert len(body['geography']['nodes']) <= 801 and body['binary']['metrics']['height'] <= 7
