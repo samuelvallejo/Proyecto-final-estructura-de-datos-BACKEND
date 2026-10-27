@@ -316,3 +316,8 @@ def test_invalid_report_range():
 def test_empty_report_snapshot():
     value = ReportRiskIndex().snapshot()
     assert value['rootId'] is None and value['nodes'] == [] and value['traversal']['reportIds'] == []
+
+
+def test_places_unknown_labels():
+    tree = ReportPlaceTree([report(city=None,neighborhood=None,street=None)])
+    assert {'Ciudad sin identificar','Barrio sin identificar','Vía sin identificar'} <= {node.label for node in tree.nodes.values()}
