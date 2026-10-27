@@ -47,3 +47,7 @@ def test_search_left_descendant():
 
 def test_search_right_descendant():
     assert example().search(8) == '8'
+
+
+def test_search_absent():
+    tree = example(); assert tree.search(4) is None and not tree.contains(4)
