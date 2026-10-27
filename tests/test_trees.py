@@ -171,3 +171,8 @@ def test_remove_deep_successor_preserves_its_child():
     for value in [10,5,20,15,17,25]: tree.insert(value,str(value))
     tree.remove(10)
     assert keys(tree.in_order()) == [5,15,17,20,25] and tree.search(17) == '17' and tree.validate()
+
+
+def test_balanced_bulk_build():
+    tree = BinarySearchTree.from_items((n,n) for n in range(200))
+    assert tree.height == 7 and tree.validate() and len(tree) == 200
