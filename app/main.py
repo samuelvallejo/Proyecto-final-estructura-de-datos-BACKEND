@@ -258,7 +258,9 @@ def create_app(settings=None):
 
     @app.get('/api/reports/priority', dependencies=[Depends(current_session)])
     def priority(limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
+        from .report_trees import ReportRiskIndex
         items, total = app.state.repo.list_reports(limit, offset, priority=True)
+        items = ReportRiskIndex(items).ordered('descending')
         return {'reports': items, 'total': total, 'hasMore': offset + len(items) < total}
 
     @app.get('/api/reports/nearby', dependencies=[Depends(current_session)])
