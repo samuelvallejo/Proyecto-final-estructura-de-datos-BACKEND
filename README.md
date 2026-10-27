@@ -2,15 +2,17 @@
 
 API FastAPI para escaneo, análisis y reportes geolocalizados de baches. Requiere PostgreSQL; Railway ejecuta las migraciones de Alembic al iniciar.
 
+La detección utiliza exclusivamente los pesos personalizados `models/best.pt` con Ultralytics YOLOv8s. La carga de fotografías está en `POST /api/detect/potholes`; devuelve cajas en píxeles, confianza y dimensiones originales. Instrucciones completas, configuración de clase y pruebas: [YOLO_INTEGRACION.md](YOLO_INTEGRACION.md).
+
 ## Railway
 
 Configura el servicio desde la raíz de este repositorio con el Dockerfile incluido y agrega una base PostgreSQL. Variables del servicio:
 
 - `DATABASE_URL`: referencia a la variable `DATABASE_URL` del servicio PostgreSQL de Railway.
 - `CORS_ORIGINS`: URL pública exacta del frontend de Vercel, sin `/` final.
-- `AI_PROVIDER=auto`: intenta Gemini cuando hay una clave; usa el modelo local si no hay cuota o configuración.
-- `GEMINI_API_KEY` (opcional): guardar únicamente en Variables de Railway.
-- `GEMINI_MODEL=gemini-3.5-flash-lite`
+- `DATA_ENCRYPTION_KEY`: conserva la clave privada de cifrado de cuentas y recorridos.
+- `AI_PROVIDER=local`: la detección usa `best.pt`, sin Gemini ni modelos genéricos.
+- `POTHOLE_MODEL_PATH=models/best.pt`, `YOLO_CONFIDENCE=0.25`, `YOLO_POTHOLE_CLASS_ID=0`.
 - `NOMINATIM_USER_AGENT`: identificador de esta aplicación y contacto del operador.
 
 Railway proporciona `PORT`; el contenedor escucha en `0.0.0.0:$PORT`. El healthcheck es `/api/health`.
@@ -24,7 +26,8 @@ Instala Python 3.12 y PostgreSQL. Desde esta carpeta, prepara un entorno e insta
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements-dev.txt
+python -m pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r requirements.lock.txt -r requirements-dev.txt
 Copy-Item .env.example .env
 ```
 

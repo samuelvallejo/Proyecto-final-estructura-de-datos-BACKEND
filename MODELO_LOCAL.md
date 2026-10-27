@@ -1,6 +1,10 @@
-# Atribución del modelo local
+# Modelos locales
 
-## Detector activo: segmentación a 640 píxeles
+## Detector activo: best.pt personalizado
+
+El detector desplegado carga únicamente `models/best.pt`, entregado por el usuario. Consulte [YOLO_INTEGRACION.md](YOLO_INTEGRACION.md) para su huella, clase real `0`, mapeo a `pothole` y configuración. No se modifican ni reentrenan los pesos.
+
+## Archivo histórico: segmentación ONNX a 640 píxeles
 
 `backend/models/pothole-seg-640.onnx` procede de
 [subhodeepmoitra/pothole-detection-yolov8](https://huggingface.co/subhodeepmoitra/pothole-detection-yolov8/tree/f829c25).
