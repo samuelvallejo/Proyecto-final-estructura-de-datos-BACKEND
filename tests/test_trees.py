@@ -82,3 +82,7 @@ def test_postorder():
 def test_root_level_and_parent():
     root, level, parent = next(example().level_order())
     assert root.key == 5 and level == 1 and parent is None
+
+
+def test_level_order_fifo():
+    assert [(node.key, level) for node, level, _ in example().level_order()] == [(5,1),(2,2),(7,2),(1,3),(3,3),(6,3),(8,3)]
