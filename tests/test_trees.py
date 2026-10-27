@@ -247,3 +247,8 @@ def test_report_index_equal_scores():
 def test_report_key_tie_order():
     index = ReportRiskIndex([report('b'),report('a')])
     assert [r['id'] for r in index.ordered('inorder')] == ['a','b']
+
+
+def test_report_risk_order():
+    index = ReportRiskIndex([report('a',20),report('b',90),report('c',60)])
+    assert [r['hazardScore'] for r in index.ordered()] == [90,60,20]
