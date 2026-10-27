@@ -87,3 +87,16 @@ class BinarySearchTree(Generic[K, V]):
                 pending.append(node.right)
             if node.left is not None:
                 pending.append(node.left)
+
+    def post_order(self) -> Iterator[TreeNode[K, V]]:
+        pending = [(self.root, False)] if self.root else []
+        while pending:
+            node, visited = pending.pop()
+            if visited:
+                yield node
+                continue
+            pending.append((node, True))
+            if node.right is not None:
+                pending.append((node.right, False))
+            if node.left is not None:
+                pending.append((node.left, False))
