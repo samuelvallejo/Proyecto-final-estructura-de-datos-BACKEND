@@ -292,3 +292,8 @@ def test_binary_snapshot_excludes_private_fields():
     value = report(); value['session_id'] = 'secret'; value['email'] = 'private@example.invalid'
     snapshot = str(ReportRiskIndex([value]).snapshot())
     assert 'secret' not in snapshot and 'private@example.invalid' not in snapshot and 'session_id' not in snapshot
+
+
+def test_invalid_scores():
+    for value in [True, float('nan'), float('inf'), -1, 101]:
+        with pytest.raises(ValueError): report_key(report(score=value))
