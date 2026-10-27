@@ -125,3 +125,14 @@ class BinarySearchTree(Generic[K, V]):
     @property
     def height(self) -> int:
         return max((level - 1 for _, level, _ in self.level_order()), default=-1)
+
+    def metrics(self) -> dict:
+        leaves = branches = maximum_degree = 0
+        for node, _, parent in self.level_order():
+            degree = int(node.left is not None) + int(node.right is not None)
+            maximum_degree = max(maximum_degree, degree)
+            leaves += degree == 0
+            branches += parent is not None and degree > 0
+        return {'weight': self.size, 'height': self.height, 'levels': self.height + 1,
+                'leaves': leaves, 'branches': branches, 'internalNodes': self.size - leaves,
+                'order': 2, 'maxDegree': maximum_degree}
