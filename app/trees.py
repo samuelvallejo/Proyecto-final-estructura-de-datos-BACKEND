@@ -121,3 +121,7 @@ class BinarySearchTree(Generic[K, V]):
         if order not in methods:
             raise ValueError('Recorrido inválido')
         return methods[order]()
+
+    @property
+    def height(self) -> int:
+        return max((level - 1 for _, level, _ in self.level_order()), default=-1)
