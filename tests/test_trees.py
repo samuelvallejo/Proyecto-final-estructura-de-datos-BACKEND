@@ -367,3 +367,8 @@ def test_place_path():
     tree = ReportPlaceTree([report()])
     assert [n.kind for n in tree.path_to('report-a')] == ['root','city','neighborhood','street','report']
     assert tree.path_to('missing') == []
+
+
+def test_places_stable_input_order():
+    values = [report('b',city='Cali'),report('a',city='BOGOTÁ')]
+    assert ReportPlaceTree(values).snapshot() == ReportPlaceTree(reversed(values)).snapshot()
