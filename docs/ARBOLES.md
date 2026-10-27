@@ -55,3 +55,8 @@ Barrios con el mismo nombre en ciudades distintas permanecen separados. Los nomb
 La respuesta contiene `generatedAt`, `scope`, `binary`, `geography` y `reports`. `scope.totalReports` cuenta activos; `totalMatched` cuenta los del intervalo; `loaded` cuenta la muestra; `hasMore` informa si faltan coincidencias. La muestra selecciona los de mayor riesgo antes de aplicar el recorrido solicitado. Los filtros se aplican antes del límite SQL.
 
 Los árboles exportan nodos y referencias por identificador, evitando JSON recursivo y duplicación de reportes completos. El árbol geográfico tiene como máximo 801 nodos para 200 reportes. Los puntos REPAIRED y REJECTED se excluyen.
+## Persistencia y privacidad
+
+PostgreSQL sigue almacenando los reportes. Los árboles se construyen por consulta y no necesitan migraciones ni una tabla adicional. Consultar un árbol no crea imágenes, análisis, reportes ni eventos de auditoría.
+
+Las respuestas utilizan el mismo DTO público de reportes y no incluyen correos, contraseñas, sesiones del autor ni recorridos privados. La búsqueda geográfica usa la dirección ya asociada al reporte; no deduce GPS de una foto. Las colas, listas enlazadas, anillos y pila existentes conservan sus funciones.
