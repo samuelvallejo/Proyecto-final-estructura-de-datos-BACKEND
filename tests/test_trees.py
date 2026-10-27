@@ -389,3 +389,10 @@ def test_root_trace():
 def test_skewed_degree():
     tree = BinarySearchTree.from_items([(1,1)]); tree.insert(2,2); tree.insert(3,3)
     assert tree.metrics()['maxDegree'] == 1 and tree.metrics()['branches'] == 1
+
+
+def test_traversal_dispatch():
+    tree = example()
+    assert keys(tree.traverse('preorder')) == keys(tree.pre_order())
+    assert keys(tree.traverse('postorder')) == keys(tree.post_order())
+    assert keys(tree.traverse('level')) == [n.key for n,_,_ in tree.level_order()]
