@@ -237,3 +237,8 @@ def test_queries_are_non_mutating():
 def test_report_index_duplicate_identity():
     index = ReportRiskIndex([report('a',20),report('a',80)])
     assert index.tree.size == 1 and index.ordered()[0]['hazardScore'] == 80
+
+
+def test_report_index_equal_scores():
+    index = ReportRiskIndex([report('a'),report('b')])
+    assert {r['id'] for r in index.ordered()} == {'a','b'}
