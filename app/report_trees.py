@@ -33,3 +33,6 @@ class ReportRiskIndex:
     def remove(self, report_id):
         previous = self.by_id.pop(report_id, None)
         return self.tree.remove(report_key(previous)) if previous is not None else False
+
+    def ordered(self, order='descending'):
+        return [node.value for node in self.tree.traverse(order)]
