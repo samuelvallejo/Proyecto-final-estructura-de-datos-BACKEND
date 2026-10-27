@@ -218,3 +218,17 @@ class BinarySearchTree(Generic[K, V]):
     def rebalance(self):
         rebuilt = self.from_items((node.key, node.value) for node in self.in_order())
         self.root, self.size = rebuilt.root, rebuilt.size
+
+    def validate(self) -> bool:
+        seen = set()
+        pending = [(self.root, None, None)] if self.root else []
+        while pending:
+            node, lower, upper = pending.pop()
+            if id(node) in seen or (lower is not None and node.key <= lower) or (upper is not None and node.key >= upper):
+                return False
+            seen.add(id(node))
+            if node.right is not None:
+                pending.append((node.right, node.key, upper))
+            if node.left is not None:
+                pending.append((node.left, lower, node.key))
+        return len(seen) == self.size
