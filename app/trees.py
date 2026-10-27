@@ -100,3 +100,15 @@ class BinarySearchTree(Generic[K, V]):
                 pending.append((node.right, False))
             if node.left is not None:
                 pending.append((node.left, False))
+
+    def level_order(self) -> Iterator[tuple[TreeNode[K, V], int, TreeNode[K, V] | None]]:
+        pending = Queue()
+        if self.root is not None:
+            pending.enqueue((self.root, 1, None))
+        while pending.size:
+            node, level, parent = pending.dequeue()
+            yield node, level, parent
+            if node.left is not None:
+                pending.enqueue((node.left, level + 1, node))
+            if node.right is not None:
+                pending.enqueue((node.right, level + 1, node))
