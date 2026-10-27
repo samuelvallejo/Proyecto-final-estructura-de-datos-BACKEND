@@ -48,3 +48,10 @@ Esta construcción no transforma la clase en un AVL: no hay rotaciones automáti
 La jerarquía es raíz → ciudad → barrio → vía → reporte. Cada nodo mantiene hijos explícitos, cantidad de reportes y riesgo máximo de su subárbol. Los nombres se agrupan sin diferencias de mayúsculas, espacios o acentos; los identificadores de rama se derivan de la ruta completa.
 
 Barrios con el mismo nombre en ciudades distintas permanecen separados. Los nombres ausentes usan ramas «sin identificar» sin perder las coordenadas del reporte. Una ubicación real con el mismo texto que una etiqueta de respaldo permanece separada de la ubicación desconocida.
+## API y alcance
+
+`GET /api/data-structures/trees/reports` requiere la sesión HttpOnly existente. Acepta `minScore` y `maxScore` de 0 a 100, `limit` de 1 a 200 y `order` igual a inorder, descending, preorder, postorder o level. Un intervalo invertido o parámetro inválido devuelve 422 con un mensaje seguro.
+
+La respuesta contiene `generatedAt`, `scope`, `binary`, `geography` y `reports`. `scope.totalReports` cuenta activos; `totalMatched` cuenta los del intervalo; `loaded` cuenta la muestra; `hasMore` informa si faltan coincidencias. La muestra selecciona los de mayor riesgo antes de aplicar el recorrido solicitado. Los filtros se aplican antes del límite SQL.
+
+Los árboles exportan nodos y referencias por identificador, evitando JSON recursivo y duplicación de reportes completos. El árbol geográfico tiene como máximo 801 nodos para 200 reportes. Los puntos REPAIRED y REJECTED se excluyen.
