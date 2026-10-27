@@ -85,3 +85,12 @@ def test_tree_api_excludes_inactive(client):
         conn.execute(update(s.potholes).where(s.potholes.c.id == holes[ids[1]]).values(status='REJECTED'))
     body = client.get(URL).json()
     assert [r['id'] for r in body['reports']] == [ids[2]] and body['scope']['totalReports'] == 1
+
+
+def test_priority_pages_have_consistent_binary_tie_order(client):
+    token(client); ids = seed_reports(client,[70]*5)
+    with client.app.state.engine.begin() as conn:
+        conn.execute(update(s.reports).values(created_at=100))
+    first = client.get('/api/reports/priority?limit=2').json()['reports']
+    second = client.get('/api/reports/priority?limit=2&offset=2').json()['reports']
+    assert [r['id'] for r in first+second] == sorted(ids,reverse=True)[:4]
