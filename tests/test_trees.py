@@ -61,3 +61,7 @@ def test_contains_none_value():
 def test_empty_traversals():
     tree = BinarySearchTree()
     assert all(list(tree.traverse(order)) == [] for order in ['inorder', 'descending', 'preorder', 'postorder', 'level'])
+
+
+def test_pdf_inorder_example():
+    assert keys(example().in_order()) == [1, 2, 3, 5, 6, 7, 8]
