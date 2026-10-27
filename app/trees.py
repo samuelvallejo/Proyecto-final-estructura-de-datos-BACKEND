@@ -146,3 +146,23 @@ class BinarySearchTree(Generic[K, V]):
                 break
             current = current.left if key < current.key else current.right
         return result
+
+    def between(self, lower: K, upper: K) -> Iterator[TreeNode[K, V]]:
+        if upper < lower:
+            raise ValueError('Rango inválido')
+        pending = []
+        current = self.root
+        while current is not None or pending:
+            while current is not None:
+                if current.key < lower:
+                    current = current.right
+                else:
+                    pending.append(current)
+                    current = current.left
+            if not pending:
+                break
+            current = pending.pop()
+            if current.key > upper:
+                break
+            yield current
+            current = current.right
