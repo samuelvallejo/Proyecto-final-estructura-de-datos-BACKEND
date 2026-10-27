@@ -122,3 +122,11 @@ class ReportPlaceTree:
             node, level = pending.pop()
             yield node, level
             pending.extend((child, level + 1) for child in reversed(node.children))
+
+    def metrics(self):
+        levels = max((level for _, level in self.walk()), default=0)
+        leaves = sum(not node.children for node in self.nodes.values())
+        return {'weight': len(self.nodes), 'height': levels - 1, 'levels': levels,
+                'leaves': leaves, 'branches': sum(bool(node.children) for node in self.nodes.values()) - bool(self.root.children),
+                'maxDegree': max((len(node.children) for node in self.nodes.values()), default=0),
+                'reports': self.root.report_count}
