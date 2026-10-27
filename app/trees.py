@@ -52,3 +52,6 @@ class BinarySearchTree(Generic[K, V]):
     def search(self, key: K) -> V | None:
         node = self.find_node(key)
         return node.value if node is not None else None
+
+    def contains(self, key: K) -> bool:
+        return self.find_node(key) is not None
