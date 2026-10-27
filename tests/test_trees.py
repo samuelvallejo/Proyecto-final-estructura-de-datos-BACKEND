@@ -297,3 +297,8 @@ def test_binary_snapshot_excludes_private_fields():
 def test_invalid_scores():
     for value in [True, float('nan'), float('inf'), -1, 101]:
         with pytest.raises(ValueError): report_key(report(score=value))
+
+
+def test_invalid_timestamps():
+    for value in [-1, float('inf'), True]:
+        with pytest.raises(ValueError): report_key(report(timestamp=value))
