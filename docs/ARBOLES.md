@@ -24,3 +24,12 @@ La selección SQL usa el mismo desempate para que las páginas prioritarias mant
 `insert`, `find_node`, `search`, `contains`, `trace` y `remove` siguen los enlaces según comparaciones de claves. Su costo depende de la altura `h`: O(h). Si el árbol degenera en una cadena, h puede llegar a n-1.
 
 `remove` contempla hojas, un hijo y dos hijos; en el último caso utiliza el sucesor del subárbol derecho. `between` poda ramas que quedan fuera del intervalo. `clear` vacía únicamente el índice temporal y no elimina filas de PostgreSQL.
+## Recorridos
+
+- En orden: izquierdo, nodo, derecho; produce riesgo ascendente.
+- Descendente: derecho, nodo, izquierdo; produce prioridad de mayor riesgo.
+- Preorden: nodo, izquierdo, derecho; muestra la raíz primero.
+- Postorden: izquierdo, derecho, nodo; muestra la raíz al final.
+- Por niveles: una cola FIFO visita primero los niveles cercanos a la raíz.
+
+Los recorridos son iterativos. Por niveles se reutiliza la cola enlazada existente del proyecto. Los recorridos no modifican el árbol ni los reportes guardados.
