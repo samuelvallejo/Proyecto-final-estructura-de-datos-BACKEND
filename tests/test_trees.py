@@ -242,3 +242,8 @@ def test_report_index_duplicate_identity():
 def test_report_index_equal_scores():
     index = ReportRiskIndex([report('a'),report('b')])
     assert {r['id'] for r in index.ordered()} == {'a','b'}
+
+
+def test_report_key_tie_order():
+    index = ReportRiskIndex([report('b'),report('a')])
+    assert [r['id'] for r in index.ordered('inorder')] == ['a','b']
