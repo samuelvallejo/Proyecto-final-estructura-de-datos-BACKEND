@@ -65,3 +65,7 @@ def test_empty_traversals():
 
 def test_pdf_inorder_example():
     assert keys(example().in_order()) == [1, 2, 3, 5, 6, 7, 8]
+
+
+def test_reverse_order():
+    assert keys(example().reverse_order()) == [8, 7, 6, 5, 3, 2, 1]
