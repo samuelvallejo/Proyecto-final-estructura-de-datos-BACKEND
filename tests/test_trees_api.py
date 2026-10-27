@@ -41,3 +41,12 @@ def test_tree_api_bounded_sample(client):
     assert body['scope']['loaded'] == len(body['binary']['nodes']) == 200
     assert body['scope']['totalMatched'] == 205 and body['scope']['hasMore']
     assert len(body['geography']['nodes']) <= 801 and body['binary']['metrics']['height'] <= 7
+
+
+def test_tree_api_traversals(client):
+    token(client); ids = seed_reports(client,[20,30,40,50,60,70,80])
+    for order in ['inorder','descending','preorder','postorder','level']:
+        body = client.get(URL+'?order='+order).json()
+        assert set(body['binary']['traversal']['reportIds']) == set(ids)
+        assert [r['id'] for r in body['reports']] == body['binary']['traversal']['reportIds']
+        assert body['binary']['traversal']['order'] == order
