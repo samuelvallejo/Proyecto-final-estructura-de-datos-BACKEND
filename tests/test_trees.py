@@ -267,3 +267,9 @@ def test_invalid_upsert_preserves_previous():
 
 def test_report_remove_identity():
     index = ReportRiskIndex([report('a')]); assert index.remove('a') and not index.remove('a') and index.tree.size == 0
+
+
+def test_report_range_zero_and_hundred():
+    index = ReportRiskIndex([report('a',0),report('b',100),report('c',50)])
+    assert [r['id'] for r in index.in_range(0,0)] == ['a']
+    assert [r['id'] for r in index.in_range(100,100)] == ['b']
