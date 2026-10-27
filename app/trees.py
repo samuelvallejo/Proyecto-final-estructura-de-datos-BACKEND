@@ -77,3 +77,13 @@ class BinarySearchTree(Generic[K, V]):
             current = pending.pop()
             yield current
             current = current.left
+
+    def pre_order(self) -> Iterator[TreeNode[K, V]]:
+        pending = [self.root] if self.root else []
+        while pending:
+            node = pending.pop()
+            yield node
+            if node.right is not None:
+                pending.append(node.right)
+            if node.left is not None:
+                pending.append(node.left)
