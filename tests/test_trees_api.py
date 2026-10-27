@@ -11,3 +11,11 @@ URL = '/api/data-structures/trees/reports'
 
 def test_tree_api_requires_authentication(client):
     assert client.get(URL).status_code == 401
+
+
+def test_tree_api_empty(client):
+    token(client); response = client.get(URL)
+    assert response.status_code == 200
+    body = response.json()
+    assert body['scope']['loaded'] == 0 and body['binary']['rootId'] is None
+    assert body['binary']['metrics']['height'] == -1 and body['geography']['metrics']['reports'] == 0
