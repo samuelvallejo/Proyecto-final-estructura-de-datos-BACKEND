@@ -60,3 +60,10 @@ Los árboles exportan nodos y referencias por identificador, evitando JSON recur
 PostgreSQL sigue almacenando los reportes. Los árboles se construyen por consulta y no necesitan migraciones ni una tabla adicional. Consultar un árbol no crea imágenes, análisis, reportes ni eventos de auditoría.
 
 Las respuestas utilizan el mismo DTO público de reportes y no incluyen correos, contraseñas, sesiones del autor ni recorridos privados. La búsqueda geográfica usa la dirección ya asociada al reporte; no deduce GPS de una foto. Las colas, listas enlazadas, anillos y pila existentes conservan sus funciones.
+## Verificación y ejecución local
+
+Activa el entorno Python del proyecto e instala `requirements.lock.txt`. No hay una dependencia nueva para los árboles. Ejecuta `python -m pytest tests/test_trees.py -q` para invariantes, recorridos, eliminación, empates y jerarquías.
+
+Para la integración, configura `TEST_DATABASE_URL` con una conexión local de pruebas y ejecuta `python -m pytest tests/test_trees_api.py -q`. Estas pruebas crean esquemas temporales separados, comprueban dos cuentas, privacidad, intervalos, paginación y muestras de más de 200 reportes, y eliminan sus propios esquemas al terminar.
+
+La API se inicia como antes: `python -m uvicorn app.main:app --port 3001`. Los árboles pueden verificarse desde la sección Reportes o Estructuras del frontend. La validación de navegador usa reportes existentes; las comprobaciones públicas no crean peligros viales ficticios.
