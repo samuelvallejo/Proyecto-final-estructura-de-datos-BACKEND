@@ -39,3 +39,7 @@ def test_equal_key_updates_value():
 
 def test_search_root():
     assert example().search(5) == '5'
+
+
+def test_search_left_descendant():
+    assert example().search(1) == '1'
