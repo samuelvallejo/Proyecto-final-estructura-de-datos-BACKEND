@@ -19,3 +19,8 @@ No se sustituyen los enlaces por una lista ordenada. Las listas y arrays se usan
 La clave es `(hazardScore, timestamp, id)`. Así se conservan dos huecos con la misma puntuación y fecha. Un identificador de reporte repetido actualiza ese reporte; no crea otro nodo. El recorrido descendente prioriza riesgo alto, fecha reciente y luego identificador descendente.
 
 La selección SQL usa el mismo desempate para que las páginas prioritarias mantengan un orden global coherente. La puntuación es orientativa; ordenar por ella no mide la profundidad física del daño ni convierte un aviso comunitario en diagnóstico de YOLO.
+## Operaciones y complejidad
+
+`insert`, `find_node`, `search`, `contains`, `trace` y `remove` siguen los enlaces según comparaciones de claves. Su costo depende de la altura `h`: O(h). Si el árbol degenera en una cadena, h puede llegar a n-1.
+
+`remove` contempla hojas, un hijo y dos hijos; en el último caso utiliza el sucesor del subárbol derecho. `between` poda ramas que quedan fuera del intervalo. `clear` vacía únicamente el índice temporal y no elimina filas de PostgreSQL.
