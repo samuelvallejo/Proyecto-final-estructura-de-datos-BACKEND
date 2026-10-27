@@ -48,3 +48,7 @@ class BinarySearchTree(Generic[K, V]):
                 return current
             current = current.left if key < current.key else current.right
         return None
+
+    def search(self, key: K) -> V | None:
+        node = self.find_node(key)
+        return node.value if node is not None else None
