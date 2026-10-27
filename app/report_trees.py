@@ -130,3 +130,12 @@ class ReportPlaceTree:
                 'leaves': leaves, 'branches': sum(bool(node.children) for node in self.nodes.values()) - bool(self.root.children),
                 'maxDegree': max((len(node.children) for node in self.nodes.values()), default=0),
                 'reports': self.root.report_count}
+
+    def path_to(self, node_id):
+        if node_id not in self.nodes:
+            return []
+        result = []
+        while node_id is not None:
+            result.append(self.nodes[node_id])
+            node_id = self.parents.get(node_id)
+        return list(reversed(result))
