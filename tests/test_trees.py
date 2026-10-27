@@ -56,3 +56,8 @@ def test_search_absent():
 def test_contains_none_value():
     tree = BinarySearchTree(); tree.insert(1, None)
     assert tree.contains(1) and tree.search(1) is None
+
+
+def test_empty_traversals():
+    tree = BinarySearchTree()
+    assert all(list(tree.traverse(order)) == [] for order in ['inorder', 'descending', 'preorder', 'postorder', 'level'])
