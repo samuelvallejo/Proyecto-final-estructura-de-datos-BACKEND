@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Query, Depends, Request
 from fastapi.exceptions import RequestValidationError
@@ -65,6 +66,15 @@ def create_app(settings=None):
     app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()],
                        allow_credentials=True, allow_methods=['GET', 'POST'],
                        allow_headers=['Content-Type'], expose_headers=['Retry-After'])
+
+    @app.middleware('http')
+    async def request_logging(request, call_next):
+        started = time.monotonic()
+        request_id = request.headers.get('X-Request-ID') or uuid.uuid4().hex
+        response = await call_next(request)
+        response.headers['X-Request-ID'] = request_id
+        logger.info('%s %s -> %s in %.1fms', request.method, request.url.path, response.status_code, (time.monotonic() - started) * 1000)
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
