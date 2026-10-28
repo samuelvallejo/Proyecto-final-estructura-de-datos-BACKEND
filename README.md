@@ -48,6 +48,10 @@ El archivo `.env.example` documenta las variables. No subas `.env` ni claves al 
 
 El endpoint `GET /api/health` expone el estado del servicio y de la base de datos (`status` y `database`). Lo consumen el healthcheck de Railway y el frontend para conocer la disponibilidad operativa de la API.
 
+## Base de datos
+
+La API persiste en PostgreSQL. En el despliegue de Railway se crea el servicio PostgreSQL y `DATABASE_URL` debe apuntar al mismo. Las migraciones de Alembic se aplican al iniciar (`alembic upgrade head`).
+
 ## Desarrollo local y pruebas
 
 Instala Python 3.12 y PostgreSQL. Desde esta carpeta, prepara un entorno e instala las dependencias de desarrollo:
