@@ -128,10 +128,11 @@ def create_app(settings=None):
 
     @app.get('/api/health')
     def health():
+        database_status = 'up'
         with app.state.engine.connect() as conn:
             conn.execute(text('SELECT 1'))
             count = conn.execute(select(func.count()).select_from(s.reports)).scalar_one()
-        return {'status': 'ok'}
+        return {'status': 'ok', 'database': database_status}
 
     @app.post('/api/sessions', status_code=201)
     def new_session():

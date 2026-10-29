@@ -66,7 +66,7 @@ def scan(client, headers, coords=None, data=None):
 
 
 def test_migration_scan_persistence_deduplication_and_geography(client):
-    assert client.get('/api/health').json() == {'status': 'ok'}
+    assert client.get('/api/health').json() == {'status': 'ok', 'database': 'up'}
     headers = token(client)
     async def geocode(position):
         return {'cacheKey': f'{position.lat:.4f},{position.lng:.4f}', 'source': 'nominatim',
