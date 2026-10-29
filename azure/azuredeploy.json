@@ -8,18 +8,18 @@
       "minLength": 3,
       "maxLength": 20,
       "metadata": {
-        "description": "Prefijo en minúsculas, solo letras y números."
+        "description": "Prefijo en minÃºsculas, solo letras y nÃºmeros."
       }
     },
     "location": {
       "type": "string",
-      "defaultValue": "westus2"
+      "defaultValue": "westus"
     },
     "backendRef": {
       "type": "string",
       "defaultValue": "codex/azure-deployment",
       "metadata": {
-        "description": "Rama o SHA público revisado del backend con azure/Dockerfile."
+        "description": "Rama o SHA pÃºblico revisado del backend con azure/Dockerfile."
       }
     },
     "frontendCommit": {
@@ -37,7 +37,7 @@
       "minLength": 20,
       "maxLength": 128,
       "metadata": {
-        "description": "Contraseña nueva de PostgreSQL; nunca se muestra en salidas."
+        "description": "ContraseÃ±a nueva de PostgreSQL; nunca se muestra en salidas."
       }
     },
     "dataEncryptionKey": {
