@@ -1,0 +1,428 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "projectName": {
+      "type": "string",
+      "defaultValue": "bachescanai",
+      "minLength": 3,
+      "maxLength": 20,
+      "metadata": {
+        "description": "Prefijo en minúsculas, solo letras y números."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "westus2"
+    },
+    "backendRef": {
+      "type": "string",
+      "defaultValue": "codex/azure-deployment",
+      "metadata": {
+        "description": "Rama o SHA público revisado del backend con azure/Dockerfile."
+      }
+    },
+    "frontendCommit": {
+      "type": "string",
+      "defaultValue": "fcb5e0f3d3ca97ca319ce19857f56b808b721bcb",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "imageTag": {
+      "type": "string",
+      "defaultValue": "azure-20261029-1"
+    },
+    "databasePassword": {
+      "type": "secureString",
+      "minLength": 20,
+      "maxLength": 128,
+      "metadata": {
+        "description": "Contraseña nueva de PostgreSQL; nunca se muestra en salidas."
+      }
+    },
+    "dataEncryptionKey": {
+      "type": "secureString",
+      "minLength": 44,
+      "maxLength": 44,
+      "metadata": {
+        "description": "Clave Fernet nueva de 32 bytes en base64url, creada con cryptography."
+      }
+    }
+  },
+  "variables": {
+    "appName": "[concat(parameters('projectName'), '-app')]",
+    "environmentName": "[concat(parameters('projectName'), '-env')]",
+    "vnetName": "[concat(parameters('projectName'), '-vnet')]",
+    "registryName": "[concat(parameters('projectName'), uniqueString(resourceGroup().id))]",
+    "databaseName": "[concat(parameters('projectName'), '-pg-', uniqueString(resourceGroup().id))]",
+    "identityName": "[concat(parameters('projectName'), '-pull')]",
+    "dnsName": "private.postgres.database.azure.com",
+    "identityId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName'))]",
+    "registryId": "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]",
+    "vnetId": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+    "dnsId": "[resourceId('Microsoft.Network/privateDnsZones', variables('dnsName'))]",
+    "dbId": "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('databaseName'))]",
+    "environmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+    "pullRoleId": "[guid(variables('registryId'), variables('identityId'), 'AcrPull')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2024-05-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.30.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "containers",
+            "properties": {
+              "addressPrefix": "10.30.0.0/23",
+              "delegations": [
+                {
+                  "name": "containerapps",
+                  "properties": {
+                    "serviceName": "Microsoft.App/environments"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "database",
+            "properties": {
+              "addressPrefix": "10.30.2.0/24",
+              "delegations": [
+                {
+                  "name": "postgres",
+                  "properties": {
+                    "serviceName": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2024-06-01",
+      "name": "[variables('dnsName')]",
+      "location": "global",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2024-06-01",
+      "name": "[concat(variables('dnsName'), '/bachescan-link')]",
+      "location": "global",
+      "dependsOn": [
+        "[variables('vnetId')]",
+        "[variables('dnsId')]"
+      ],
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[variables('vnetId')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('identityName')]",
+      "location": "[parameters('location')]",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('registryName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "adminUserEnabled": false,
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[variables('pullRoleId')]",
+      "scope": "[variables('registryId')]",
+      "dependsOn": [
+        "[variables('registryId')]",
+        "[variables('identityId')]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+        "principalId": "[reference(variables('identityId'), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+      "apiVersion": "2025-03-01-preview",
+      "name": "[concat(variables('registryName'), '/build-', parameters('imageTag'))]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[variables('registryId')]"
+      ],
+      "properties": {
+        "forceUpdateTag": "[parameters('imageTag')]",
+        "runRequest": {
+          "type": "DockerBuildRequest",
+          "sourceLocation": "[concat('https://github.com/samuelvallejo/Proyecto-final-estructura-de-datos-BACKEND.git#', parameters('backendRef'))]",
+          "dockerFilePath": "azure/Dockerfile",
+          "imageNames": [
+            "[concat('bachescan:', parameters('imageTag'))]"
+          ],
+          "isPushEnabled": true,
+          "noCache": false,
+          "timeout": 1800,
+          "platform": {
+            "os": "Linux",
+            "architecture": "amd64"
+          },
+          "agentConfiguration": {
+            "cpu": 2
+          },
+          "arguments": [
+            {
+              "name": "FRONTEND_COMMIT",
+              "value": "[parameters('frontendCommit')]",
+              "isSecret": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "apiVersion": "2024-08-01",
+      "name": "[variables('databaseName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[variables('vnetId')]",
+        "[resourceId('Microsoft.Network/privateDnsZones/virtualNetworkLinks', variables('dnsName'), 'bachescan-link')]"
+      ],
+      "sku": {
+        "name": "Standard_B1ms",
+        "tier": "Burstable"
+      },
+      "properties": {
+        "version": "17",
+        "administratorLogin": "bachescanadmin",
+        "administratorLoginPassword": "[parameters('databasePassword')]",
+        "storage": {
+          "storageSizeGB": 32,
+          "autoGrow": "Disabled"
+        },
+        "backup": {
+          "backupRetentionDays": 7,
+          "geoRedundantBackup": "Disabled"
+        },
+        "highAvailability": {
+          "mode": "Disabled"
+        },
+        "network": {
+          "publicNetworkAccess": "Disabled",
+          "delegatedSubnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'database')]",
+          "privateDnsZoneArmResourceId": "[variables('dnsId')]"
+        },
+        "authConfig": {
+          "activeDirectoryAuth": "Disabled",
+          "passwordAuth": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2024-08-01",
+      "name": "[concat(variables('databaseName'), '/bachescan')]",
+      "dependsOn": [
+        "[variables('dbId')]"
+      ],
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2025-01-01",
+      "name": "[variables('environmentName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[variables('vnetId')]"
+      ],
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "azure-monitor"
+        },
+        "vnetConfiguration": {
+          "internal": false,
+          "infrastructureSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'containers')]"
+        },
+        "workloadProfiles": [
+          {
+            "name": "Consumption",
+            "workloadProfileType": "Consumption"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2025-01-01",
+      "name": "[variables('appName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[variables('identityId')]": {}
+        }
+      },
+      "dependsOn": [
+        "[variables('environmentId')]",
+        "[extensionResourceId(variables('registryId'), 'Microsoft.Authorization/roleAssignments', variables('pullRoleId'))]",
+        "[resourceId('Microsoft.ContainerRegistry/registries/taskRuns', variables('registryName'), concat('build-', parameters('imageTag')))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', variables('databaseName'), 'bachescan')]"
+      ],
+      "properties": {
+        "environmentId": "[variables('environmentId')]",
+        "workloadProfileName": "Consumption",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 3001,
+            "transport": "auto",
+            "allowInsecure": false
+          },
+          "registries": [
+            {
+              "server": "[reference(variables('registryId'), '2023-07-01').loginServer]",
+              "identity": "[variables('identityId')]"
+            }
+          ],
+          "secrets": [
+            {
+              "name": "database-url",
+              "value": "[concat('postgresql+psycopg://bachescanadmin:', uriComponent(parameters('databasePassword')), '@', reference(variables('dbId'), '2024-08-01').fullyQualifiedDomainName, ':5432/bachescan?sslmode=require&connect_timeout=10')]"
+            },
+            {
+              "name": "encryption-key",
+              "value": "[parameters('dataEncryptionKey')]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "bachescan",
+              "image": "[concat(reference(variables('registryId'), '2023-07-01').loginServer, '/bachescan:', parameters('imageTag'))]",
+              "resources": {
+                "cpu": 0.5,
+                "memory": "1Gi"
+              },
+              "env": [
+                {
+                  "name": "DATABASE_URL",
+                  "secretRef": "database-url"
+                },
+                {
+                  "name": "DATA_ENCRYPTION_KEY",
+                  "secretRef": "encryption-key"
+                },
+                {
+                  "name": "CORS_ORIGINS",
+                  "value": "[concat('https://', variables('appName'), '.', reference(variables('environmentId'), '2025-01-01').defaultDomain)]"
+                },
+                {
+                  "name": "SECURE_COOKIES",
+                  "value": "true"
+                },
+                {
+                  "name": "AI_PROVIDER",
+                  "value": "local"
+                },
+                {
+                  "name": "YOLO_CPU_THREADS",
+                  "value": "1"
+                },
+                {
+                  "name": "PORT",
+                  "value": "3001"
+                },
+                {
+                  "name": "NOMINATIM_USER_AGENT",
+                  "value": "BacheScanAI-academic-Azure/1.0"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "Startup",
+                  "httpGet": {
+                    "path": "/api/health",
+                    "port": 3001
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 10,
+                  "timeoutSeconds": 5,
+                  "failureThreshold": 60
+                },
+                {
+                  "type": "Readiness",
+                  "httpGet": {
+                    "path": "/api/health",
+                    "port": 3001
+                  },
+                  "periodSeconds": 10,
+                  "timeoutSeconds": 5,
+                  "failureThreshold": 6
+                },
+                {
+                  "type": "Liveness",
+                  "tcpSocket": {
+                    "port": 3001
+                  },
+                  "periodSeconds": 30,
+                  "timeoutSeconds": 3,
+                  "failureThreshold": 3
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 0,
+            "maxReplicas": 1,
+            "rules": [
+              {
+                "name": "http",
+                "http": {
+                  "metadata": {
+                    "concurrentRequests": "2"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "applicationUrl": {
+      "type": "string",
+      "value": "[concat('https://', variables('appName'), '.', reference(variables('environmentId'), '2025-01-01').defaultDomain)]"
+    }
+  }
+}

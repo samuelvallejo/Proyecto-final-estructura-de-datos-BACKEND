@@ -23,6 +23,7 @@ from .trips import router as trip_router, validate_scan_trip, link_reports
 from .community import router as community_router
 from .tree_api import router as tree_router
 from .graph_api import router as graph_router
+from .web import mount_frontend
 
 logger = logging.getLogger(__name__)
 
@@ -310,6 +311,7 @@ def create_app(settings=None):
                 'graph': {'use': 'Red de cercanía entre baches: listas de adyacencia, BFS, DFS y Dijkstra'},
                 'persistence': 'PostgreSQL; las estructuras de ejecución son temporales por proceso'}
 
+    mount_frontend(app, settings.static_root)
     return app
 
 

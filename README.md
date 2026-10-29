@@ -68,3 +68,7 @@ Consulta [la guía de árboles](docs/ARBOLES.md) para el uso, la correspondencia
 Los reportes activos también forman un grafo no dirigido y ponderado por distancia geográfica. Implementa listas de adyacencia, BFS con cola enlazada, DFS con pila, componentes y Dijkstra. La API protegida `/api/data-structures/graphs/reports` consulta hasta 80 reportes de mayor riesgo y conecta los que están dentro de 50 a 2000 metros. La pantalla permite inspeccionar vecinos, recorrer pasos y mostrar el grafo en el mapa. Las conexiones representan cercanía, no calles o rutas para conducir.
 
 Consulta [GRAFOS.md](docs/GRAFOS.md) para las fuentes académicas consultadas en internet, archivos, contrato, límites y pruebas. No necesita una migración ni dependencias nuevas.
+
+## Preparación para Azure
+
+La [guía de Azure](azure/README.md) contiene un Dockerfile que integra el frontend TypeScript y la API Python con YOLO bajo una dirección HTTPS, una plantilla ARM para Container Apps y PostgreSQL privado, y la generación local de parámetros secretos. Esta preparación corresponde a una instalación independiente con base de datos nueva. La creación de recursos está sujeta a autorización de consumo de crédito y a la validación real del portal; estos archivos no implican que Azure ya esté desplegado.

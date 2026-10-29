@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     session_hours: int = 24
     data_encryption_key: str = ''
     secure_cookies: bool = True
+    static_root: str = ''
 
     def sqlalchemy_url(self) -> str:
         if not self.database_url:
