@@ -8,7 +8,7 @@
       "minLength": 3,
       "maxLength": 20,
       "metadata": {
-        "description": "Prefijo en minÃºsculas, solo letras y nÃºmeros."
+        "description": "Prefijo en minÃƒÂºsculas, solo letras y nÃƒÂºmeros."
       }
     },
     "location": {
@@ -19,7 +19,7 @@
       "type": "string",
       "defaultValue": "codex/azure-deployment",
       "metadata": {
-        "description": "Rama o SHA pÃºblico revisado del backend con azure/Dockerfile."
+        "description": "Rama o SHA pÃƒÂºblico revisado del backend con azure/Dockerfile."
       }
     },
     "frontendCommit": {
@@ -37,7 +37,7 @@
       "minLength": 20,
       "maxLength": 128,
       "metadata": {
-        "description": "ContraseÃ±a nueva de PostgreSQL; nunca se muestra en salidas."
+        "description": "ContraseÃƒÂ±a nueva de PostgreSQL; nunca se muestra en salidas."
       }
     },
     "dataEncryptionKey": {
@@ -46,6 +46,13 @@
       "maxLength": 44,
       "metadata": {
         "description": "Clave Fernet nueva de 32 bytes en base64url, creada con cryptography."
+      }
+    },
+    "buildImageInAzure": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Usar solo si ACR Tasks está habilitado; Azure for Students de esta instalación lo bloquea. Por defecto la imagen se compila en GitHub Actions."
       }
     }
   },
@@ -202,7 +209,8 @@
             }
           ]
         }
-      }
+      },
+      "condition": "[parameters('buildImageInAzure')]"
     },
     {
       "type": "Microsoft.DBforPostgreSQL/flexibleServers",

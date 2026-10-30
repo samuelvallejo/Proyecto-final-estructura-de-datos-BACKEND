@@ -1,0 +1,54 @@
+name: Build BacheScan Azure image
+
+on:
+  push:
+    branches: [codex/azure-deployment]
+    paths:
+      - .github/workflows/azure-image.yml
+      - azure/Dockerfile
+      - app/**
+      - migrations/**
+      - requirements*.txt
+      - models/best.pt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: azure-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    if: github.repository == 'samuelvallejo/Proyecto-final-estructura-de-datos-BACKEND' && github.ref == 'refs/heads/codex/azure-deployment'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ACR_NAME: bachescanai4udjwwdxkco7m
+      FRONTEND_COMMIT: fcb5e0f3d3ca97ca319ce19857f56b808b721bcb
+    steps:
+      - name: Checkout the reviewed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Sign in with a short-lived, branch-bound Azure identity
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ vars.AZURE_BUILD_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Build and push to the private Azure registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          az acr login --name "$ACR_NAME" --only-show-errors
+          image="$ACR_NAME.azurecr.io/bachescan:azure-$GITHUB_SHA"
+          docker build --file azure/Dockerfile --build-arg "FRONTEND_COMMIT=$FRONTEND_COMMIT" --tag "$image" .
+          docker push "$image"
+          printf 'Built image: %s\n' "$image" >> "$GITHUB_STEP_SUMMARY"
+      - name: Clear the runner registry session
+        if: always()
+        shell: bash
+        run: docker logout "$ACR_NAME.azurecr.io"
