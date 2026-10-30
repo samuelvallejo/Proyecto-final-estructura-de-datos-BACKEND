@@ -4,6 +4,31 @@ API FastAPI para escaneo, análisis y reportes geolocalizados de baches. Requier
 
 La detección utiliza exclusivamente los pesos personalizados `models/best.pt` con Ultralytics YOLOv8s. La carga de fotografías está en `POST /api/detect/potholes`; devuelve cajas en píxeles, confianza y dimensiones originales. Instrucciones completas, configuración de clase y pruebas: [YOLO_INTEGRACION.md](YOLO_INTEGRACION.md).
 
+## Endpoints de la API
+
+| Método | Ruta | Descripción | Rol |
+|--------|------|-------------|-----|
+| GET | `/api/health` | Estado del servicio y de la base de datos | público |
+| POST | `/api/auth/register` | Registro de cuenta con hash PBKDF2 y rol Operario | público |
+| POST | `/api/auth/login` | Inicio de sesión con PBKDF2 y token de sesión | público |
+| POST | `/api/auth/logout` | Cierre de sesión | usuario |
+| GET | `/api/auth/session` | Estado de la sesión actual | usuario |
+| POST | `/api/auth/recover` | Recuperación de contraseña | público |
+| GET | `/api/trips` | Listar recorridos del usuario | usuario |
+| POST | `/api/trips` | Crear recorrido A a B | usuario |
+| POST | `/api/trips/{id}/samples` | Añadir muestra GPS al recorrido | usuario |
+| POST | `/api/trips/{id}/finish` | Finalizar recorrido | usuario |
+| POST | `/api/scan` | Enviar fotograma al pipeline de análisis | usuario |
+| POST | `/api/detect/potholes` | Analizar fotografía estática con YOLO | usuario |
+| GET | `/api/scans/history` | Historial de análisis por sesión | usuario |
+| GET | `/api/reports` | Listado paginado de reportes | usuario |
+| GET | `/api/reports/priority` | Listado por riesgo descendente | usuario |
+| GET | `/api/reports/nearby` | Reportes dentro de un radio de kilómetros | usuario |
+| GET | `/api/reports/patrol` | Recorrido circular de reportes prioritarios | usuario |
+| GET | `/api/data-structures/stats` | Métricas de estructuras de ejecución | usuario |
+| GET | `/api/data-structures/trees/reports` | Explorador de árboles de reportes | usuario |
+| GET | `/api/data-structures/graphs/reports` | Explorador de grafos de cercanía | usuario |
+
 ## Railway
 
 Configura el servicio desde la raíz de este repositorio con el Dockerfile incluido y agrega una base PostgreSQL. Variables del servicio:
