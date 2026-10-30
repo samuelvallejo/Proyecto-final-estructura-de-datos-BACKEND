@@ -71,4 +71,4 @@ Consulta [GRAFOS.md](docs/GRAFOS.md) para las fuentes académicas consultadas en
 
 ## Preparación para Azure
 
-La [guía de Azure](azure/README.md) contiene un Dockerfile que integra el frontend TypeScript y la API Python con YOLO bajo una dirección HTTPS, una plantilla ARM para Container Apps y PostgreSQL privado, y la generación local de parámetros secretos. Esta preparación corresponde a una instalación independiente con base de datos nueva. La creación de recursos está sujeta a autorización de consumo de crédito y a la validación real del portal; estos archivos no implican que Azure ya esté desplegado.
+La [guía de Azure](azure/README.md) documenta la instalación independiente publicada en [Azure Container Apps](https://bachescanai-app.wittyhill-59fbb47a.westus.azurecontainerapps.io/): frontend TypeScript y API Python con YOLO bajo una dirección HTTPS y PostgreSQL privado con base de datos nueva. Incluye la versión de la imagen, las comprobaciones realizadas, la plantilla ARM y las instrucciones para actualizar conservando los secretos. Vercel/Railway continúa como instalación independiente.

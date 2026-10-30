@@ -1,6 +1,17 @@
 # Despliegue independiente de BacheScan en Azure
 
-Esta preparación usa Azure for Students y despliega una instalación **nueva**, con base de datos vacía. Los usuarios se registran de nuevo en la dirección de Azure. La instalación existente de Vercel/Railway sigue siendo independiente.
+Esta instalación usa Azure for Students y una base de datos **nueva e independiente**. Los usuarios se registran de nuevo en la dirección de Azure. La instalación existente de Vercel/Railway sigue siendo independiente.
+
+## Instalación publicada
+
+- Aplicación: https://bachescanai-app.wittyhill-59fbb47a.westus.azurecontainerapps.io/
+- Grupo `rg-bachescan-ai`, recursos en `westus`; revisión `bachescanai-app--douxyo8` en ejecución y con el 100 % del tráfico.
+- Backend de la imagen: `70da465365623f31871d7be45e7a7fc7cfdaea1b`; frontend: `fcb5e0f3d3ca97ca319ce19857f56b808b721bcb`.
+- Imagen privada: `bachescanai4udjwwdxkco7m.azurecr.io/bachescan:azure-70da465365623f31871d7be45e7a7fc7cfdaea1b`.
+- Digest publicado: `sha256:b1f2d605f40e3451ab19e9e9282ad173ba4b4cb711fc401d9986d805ddb32f5c`.
+- [Compilación correcta de GitHub Actions](https://github.com/samuelvallejo/Proyecto-final-estructura-de-datos-BACKEND/actions/runs/40979903938).
+
+Verificación del 29 de octubre de 2026: HTTPS, web, cabeceras, API protegida, registro/inicio de sesión con mensajes genéricos, cookie Secure/HttpOnly, consultas PostgreSQL de reportes/árboles/grafos, detección de fotografía y fotograma de escaneo con `best.pt`, y revocación de sesión. Se usaron cuentas de prueba y no se crearon reportes con ubicaciones ficticias. La prueba por API del escaneo no sustituye una prueba de cámara y GPS en un teléfono en la calle.
 
 ## Arquitectura revisable
 
@@ -46,7 +57,7 @@ Referencias oficiales consultadas el 29 de octubre de 2026:
 6. **Revisar y crear**, comprobar permisos y validación, resolver restricciones de región/cuotas si aparecen y crear únicamente los recursos aprobados. Azure puede requerir registrar los proveedores Microsoft.App, Microsoft.ContainerRegistry, Microsoft.DBforPostgreSQL, Microsoft.Network y Microsoft.ManagedIdentity.
 7. Esperar a que la compilación de GitHub Actions y el despliegue finalicen; abrir la salida `applicationUrl`. Comprobar `/api/health`, registro/inicio de sesión, detector con `best.pt`, mapas y grafos. El primer acceso después de un escalado a cero puede tardar por el arranque del modelo.
 
-La plantilla ARM todavía necesita la validación de la suscripción y una compilación real en ACR. Una validación local de JSON o pruebas del servicio estático no confirman por sí solas un despliegue correcto.
+La plantilla pasó la validación de esta suscripción. La imagen publicada se compiló realmente en GitHub Actions y se subió a ACR; las comprobaciones de esta instalación se indican arriba. Una validación local de JSON por sí sola no confirma futuras publicaciones.
 
 ## Actualizaciones y protección de datos
 
@@ -61,3 +72,5 @@ La primera ejecución confirmó que `ACR Tasks` devuelve `TasksOperationsNotAllo
 Configurar las variables de Actions `AZURE_BUILD_CLIENT_ID`, `AZURE_TENANT_ID` y `AZURE_SUBSCRIPTION_ID` con las salidas de esa plantilla. Son identificadores, no contraseñas. La contraseña PostgreSQL y la clave Fernet no se envían a GitHub. El token OIDC es temporal, no se crea una contraseña de cliente y la identidad no tiene permiso para consultar o cambiar la base de datos ni desplegar otras aplicaciones. Actions usa versiones fijadas por SHA, `contents: read`, `id-token: write` y no mantiene credenciales de checkout.
 
 La imagen resultante se etiqueta `azure-SHA_DEL_COMMIT_DEL_BACKEND`. Tras un workflow correcto, usar ese valor en `imageTag`, mantener `buildImageInAzure=false` y volver a aplicar `azuredeploy.json` en modo Incremental con los secretos existentes. La tarea de ACR opcional no se ejecuta. Los recursos ya creados se reutilizan.
+
+GitHub utiliza el asunto OIDC inmutable `repo:samuelvallejo@230025659/Proyecto-final-estructura-de-datos-BACKEND@1403716665:ref:refs/heads/codex/azure-deployment`. La federación de Azure coincide exactamente con ese asunto, sin comodines ni acceso a otras ramas. Véase la [referencia oficial de OIDC](https://docs.github.com/en/actions/reference/security/oidc).
