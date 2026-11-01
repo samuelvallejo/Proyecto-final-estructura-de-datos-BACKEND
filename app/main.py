@@ -73,7 +73,7 @@ def create_app(settings=None):
         request_id = request.headers.get('X-Request-ID') or uuid.uuid4().hex
         response = await call_next(request)
         response.headers['X-Request-ID'] = request_id
-        logger.info('%s %s -> %s in %.1fms', request.method, request.url.path, response.status_code, (time.monotonic() - started) * 1000)
+        logger.info('%s %s %s -> %s in %.1fms', request_id, request.method, request.url.path, response.status_code, (time.monotonic() - started) * 1000)
         return response
 
     @app.exception_handler(RequestValidationError)
