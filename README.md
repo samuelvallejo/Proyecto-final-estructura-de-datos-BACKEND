@@ -74,6 +74,10 @@ pytest -q
 
 La integración crea y elimina esquemas `test_*` dentro de esa base. No uses una base de producción. Las imágenes de prueba y sus atribuciones se guardan en `tests/fixtures/`.
 
+## Cola de escaneo y latencia
+
+El endpoint `POST /api/scan` encola el fotograma en una cola FIFO con dos trabajadores (asignación round robin mediante lista circular). Cuando la cola supera `max_pending_scans` la respuesta es `429` con cabecera `Retry-After`. Cada análisis registra su latencia y la conserva en el historial de la sesión (`GET /api/scans/history`).
+
 
 ## Avisos comunitarios y alertas de cercanía
 
