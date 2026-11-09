@@ -23,6 +23,7 @@ from .trips import router as trip_router, validate_scan_trip, link_reports
 from .community import router as community_router
 from .tree_api import router as tree_router
 from .graph_api import router as graph_router
+from .migration_api import router as migration_router
 from .web import mount_frontend
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ def create_app(settings=None):
     app.include_router(community_router)
     app.include_router(tree_router)
     app.include_router(graph_router)
+    app.include_router(migration_router)
     app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()],
                        allow_credentials=True, allow_methods=['GET', 'POST'],
                        allow_headers=['Content-Type'], expose_headers=['Retry-After'])
@@ -91,7 +93,7 @@ def create_app(settings=None):
     async def upload_limit(request, call_next):
         if request.url.path.startswith('/api/') and request.method == 'POST':
             origins = {origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()}
-            if request.headers.get('origin') not in origins:
+            if request.url.path not in ('/api/migration/import', '/api/migration/export') and request.headers.get('origin') not in origins:
                 return JSONResponse({'error': 'No se pudo completar la operación.'}, status_code=403)
         if (request.url.path.startswith('/api/auth/') or request.url.path.startswith('/api/trips') or request.url.path.startswith('/api/community/')) and request.method == 'POST':
             length = request.headers.get('content-length', '0')
