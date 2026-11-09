@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     yolo_pothole_class_id: int = Field(default=0, ge=0)
     yolo_confidence: float = Field(default=.25, gt=0, le=1, allow_inf_nan=False)
     yolo_device: Literal['auto', 'cpu', 'cuda'] = 'auto'
-    yolo_image_size: int = Field(default=640, ge=320, le=1280, multiple_of=32)
+    yolo_image_size: int = Field(default=512, ge=320, le=1280, multiple_of=32)
     yolo_cpu_threads: int = Field(default=2, ge=1, le=8)
     local_model_path: str = '../backend/models/pothole-seg-640.onnx'
     local_confidence_threshold: float = .55

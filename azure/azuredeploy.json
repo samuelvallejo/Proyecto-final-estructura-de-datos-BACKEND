@@ -338,8 +338,8 @@
               "name": "bachescan",
               "image": "[concat(reference(variables('registryId'), '2023-07-01').loginServer, '/bachescan:', parameters('imageTag'))]",
               "resources": {
-                "cpu": 0.5,
-                "memory": "1Gi"
+                "cpu": 1.0,
+                "memory": "2Gi"
               },
               "env": [
                 {
@@ -364,7 +364,11 @@
                 },
                 {
                   "name": "YOLO_CPU_THREADS",
-                  "value": "1"
+                  "value": "2"
+                },
+                {
+                  "name": "YOLO_IMAGE_SIZE",
+                  "value": "512"
                 },
                 {
                   "name": "PORT",
@@ -410,8 +414,8 @@
             }
           ],
           "scale": {
-            "minReplicas": 0,
-            "maxReplicas": 1,
+            "minReplicas": 1,
+            "maxReplicas": 2,
             "rules": [
               {
                 "name": "http",

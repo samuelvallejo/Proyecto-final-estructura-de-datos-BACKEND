@@ -305,6 +305,7 @@ def create_app(settings=None):
     @app.get('/api/data-structures/stats', dependencies=[Depends(current_session)])
     def stats():
         return {**app.state.pipeline.stats(),
+                'modelLatencyMs': app.state.ai.latency_summary(),
                 'array': {'use': 'Tensor NumPy NCHW de imagen y arrays de reportes paginados'},
                 'circularDoublyLinkedList': {'use': 'Recorrido circular de baches prioritarios: anterior y siguiente'},
                 'stack': {'use': 'Historial LIFO de navegación en el frontend'},

@@ -1,11 +1,14 @@
 import asyncio
 import ast
 import io
+import threading
+import time
 from pathlib import Path
 import numpy as np
 from PIL import Image, ImageOps
 from .contracts import Analysis, BoundingBox, DamageDetection
 from .pothole_detector import PotholeDetector
+from .structures import Deque
 _open_image = Image.open
 
 def validate_image(data: bytes) -> Image.Image:
@@ -107,10 +110,29 @@ class AIService:
         self.settings = settings
         settings.ai_provider = 'local'
         self.local = PotholeDetector(settings)
+        self.model_latencies = Deque[int]()
+        self.metrics_lock = threading.Lock()
 
     async def analyze(self, data: bytes, image: Image.Image):
+        started = time.perf_counter()
         result = await asyncio.to_thread(self.local.analyze, image)
+        latency = round((time.perf_counter() - started) * 1000)
+        with self.metrics_lock:
+            self.model_latencies.append(latency)
+            if self.model_latencies.size > 100:
+                self.model_latencies.popleft()
         return result, 'local-yolo', self.local.model_name, False
+
+    def latency_summary(self):
+        with self.metrics_lock:
+            values = sorted(self.model_latencies.items)
+        if not values:
+            return {'samples': 0, 'p50': None, 'p95': None}
+        return {
+            'samples': len(values),
+            'p50': values[(len(values) - 1) // 2],
+            'p95': values[max(0, (95 * len(values) + 99) // 100 - 1)],
+        }
 
     async def close(self):
         pass

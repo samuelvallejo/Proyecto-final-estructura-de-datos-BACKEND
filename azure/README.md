@@ -19,7 +19,7 @@ Verificación del 29 de octubre de 2026: HTTPS, web, cabeceras, API protegida, r
 
 | Recurso | Configuración |
 | --- | --- |
-| Azure Container Apps | Consumption, 0.5 vCPU, 1 GiB, entre 0 y 1 réplicas; HTTPS público, puerto interno 3001 |
+| Azure Container Apps | Consumption, 1 vCPU, 2 GiB, 1 réplica mínima y 2 máximas; HTTPS público, puerto interno 3001 |
 | Entorno de Container Apps | Perfil Consumption, red virtual propia; sin GPU, perfil dedicado o endpoint privado de ACA |
 | Azure Container Registry | Standard, imágenes privadas, autenticación por identidad; sin usuario administrador |
 | ACR Task Run opcional | Deshabilitado por defecto: esta suscripción devuelve TasksOperationsNotAllowed |
@@ -29,15 +29,15 @@ Verificación del 29 de octubre de 2026: HTTPS, web, cabeceras, API protegida, r
 | Zona DNS privada y vínculo | Permiten resolver el servidor PostgreSQL dentro de la red |
 | Identidad administrada y rol | AcrPull únicamente sobre el registro de este despliegue |
 
-El frontend TypeScript y la API Python se sirven en **el mismo origen HTTPS**. El Dockerfile fija el commit del frontend `fcb5e0f3d3ca97ca319ce19857f56b808b721bcb`, ejecuta `npm ci` y compila `dist`. El backend conserva YOLO con `models/best.pt` y CPU; no descarga otro detector. Se ejecuta como usuario sin privilegios. El acceso a PostgreSQL es privado y usa TLS. Contraseñas y clave Fernet son parámetros `secureString` y secretos de Container Apps, nunca salidas ni archivos públicos.
+El frontend TypeScript y la API Python se sirven en **el mismo origen HTTPS**. El Dockerfile fija el commit del frontend `fcb5e0f3d3ca97ca319ce19857f56b808b721bcb`, ejecuta `npm ci` y compila `dist`. El backend conserva YOLO con `models/best.pt` y CPU; no descarga otro detector. La inferencia usa 512 px y dos hilos de CPU; el servicio mantiene al menos una réplica para evitar el arranque en frío y escala hasta dos cuando sube la concurrencia. Se ejecuta como usuario sin privilegios. El acceso a PostgreSQL es privado y usa TLS. Contraseñas y clave Fernet son parámetros `secureString` y secretos de Container Apps, nunca salidas ni archivos públicos.
 
 `STATIC_ROOT` activa el servicio estático opcional. Las rutas API conservan sus sesiones y permisos. La web incluye las cabeceras para permitir cámara/GPS del mismo origen y bloquear inclusión en otros sitios. No se necesita modificar `VITE_API_URL`, guardar tokens en el frontend o conceder a Azure acceso de escritura a GitHub: El workflow revisado lee el código público y sube la imagen al registro privado mediante una identidad federada de la rama de Azure.
 
 ## Costes y autorización
 
-Se debe revisar y autorizar el consumo de crédito **antes de crear los recursos**. La oferta de estudiante publicada incluye, para clientes elegibles, un registro Standard durante 12 meses y PostgreSQL B1ms hasta 750 horas/mes con 32 GiB de datos y respaldo. Container Apps incluye 180000 vCPU-segundos, 360000 GiB-segundos y 2 millones de solicitudes al mes por suscripción. Con 0.5 vCPU/1 GiB equivalen a unas 100 horas activas mensuales si las cuotas no se comparten con otras aplicaciones.
+Se debe revisar y autorizar el consumo de crédito **antes de crear los recursos**. La oferta de estudiante publicada incluye, para clientes elegibles, un registro Standard durante 12 meses y PostgreSQL B1ms hasta 750 horas/mes con 32 GiB de datos y respaldo. Container Apps incluye 180000 vCPU-segundos, 360000 GiB-segundos y 2 millones de solicitudes al mes por suscripción. Esas cuotas se comparten entre aplicaciones de la suscripción y no cubren una réplica permanente de 1 vCPU/2 GiB durante todo el mes.
 
-La red/DNS, compilaciones, transferencia y uso superior a las cuotas pueden consumir crédito. Al alcanzar 0 réplicas no se factura cómputo de la aplicación, pero los demás recursos pueden tener cargos. La elegibilidad y el crédito restante se comprueban en la cuenta; esto **no es una garantía de coste cero ni un límite duro de gasto**. No se cambia la suscripción a pago por uso. No hay apagado automático de PostgreSQL o del registro. Tras terminar las cuotas gratuitas deben revisarse los cargos antes de seguir usando los recursos.
+Mantener 1 réplica evita la espera de arranque y carga inicial del modelo, pero implica consumo de cómputo continuo, incluso cuando nadie escanea. Con 1 vCPU y 2 GiB, una réplica encendida todo el mes supera las cuotas mensuales gratuitas típicas de Container Apps; el crédito estudiantil puede cubrir parte o todo el excedente según saldo, elegibilidad y uso compartido. La segunda réplica solo aparece con concurrencia y puede añadir cargos. La red/DNS, compilaciones, transferencia y uso superior a las cuotas también pueden consumir crédito. Esto **no es una garantía de coste cero ni un límite duro de gasto**. No se cambia la suscripción a pago por uso. No hay apagado automático de PostgreSQL o del registro. Para limitar el gasto se puede volver a `minReplicas: 0`, aceptando el arranque en frío.
 
 Referencias oficiales consultadas el 29 de octubre de 2026:
 
