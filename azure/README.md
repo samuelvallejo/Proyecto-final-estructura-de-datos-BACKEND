@@ -1,6 +1,6 @@
 # Despliegue independiente de BacheScan en Azure
 
-Esta instalación usa Azure for Students y una base de datos **nueva e independiente**. Los usuarios se registran de nuevo en la dirección de Azure. La instalación existente de Vercel/Railway sigue siendo independiente.
+Esta es la instalación de producción del backend en Azure for Students. Vercel sirve el frontend y reenvía las llamadas `/api` a Azure. PostgreSQL también está alojado en Azure.
 
 ## Instalación publicada
 
@@ -61,7 +61,7 @@ La plantilla pasó la validación de esta suscripción. La imagen publicada se c
 
 ## Actualizaciones y protección de datos
 
-Conservar `databasePassword` y `dataEncryptionKey`, nombres del servidor y grupo existentes. Cambiar el SHA de backend, el SHA de frontend e `imageTag` cuando corresponda, y ejecutar la plantilla en modo **Incremental**. No usar el modo Complete. Cambiar o perder la clave impide descifrar los datos ya guardados. No se transfieren registros desde Railway en esta instalación.
+Conservar `databasePassword` y `dataEncryptionKey`, nombres del servidor y grupo existentes. Cambiar el SHA de backend, el SHA de frontend e `imageTag` cuando corresponda, y ejecutar la plantilla en modo **Incremental**. No usar el modo Complete. Cambiar o perder la clave impide descifrar los datos ya guardados.
 
 Pruebas locales: `python -m pytest tests/test_web.py -q`. Comprueban index, API JSON, prioridad de rutas, caché de assets y worker, cabeceras y archivos ausentes. El Dockerfile requiere una compilación Linux en ACR o Docker; no se ha instalado Docker en el PC para esta preparación.
 

@@ -1,21 +1,21 @@
 # BacheScan AI — Backend
 
-API FastAPI para escaneo, análisis y reportes geolocalizados de baches. Requiere PostgreSQL; Railway ejecuta las migraciones de Alembic al iniciar.
+API FastAPI para escaneo, análisis y reportes geolocalizados de baches. Requiere PostgreSQL; Azure Container Apps ejecuta las migraciones de Alembic al iniciar.
 
 La detección utiliza exclusivamente los pesos personalizados `models/best.pt` con Ultralytics YOLOv8s. La carga de fotografías está en `POST /api/detect/potholes`; devuelve cajas en píxeles, confianza y dimensiones originales. Instrucciones completas, configuración de clase y pruebas: [YOLO_INTEGRACION.md](YOLO_INTEGRACION.md).
 
-## Railway
+## Despliegue publicado en Azure
 
-Configura el servicio desde la raíz de este repositorio con el Dockerfile incluido y agrega una base PostgreSQL. Variables del servicio:
+Consulta [la guía de Azure](azure/README.md) para ver la configuración de Container Apps. Sus secretos permanecen en Azure.
 
-- `DATABASE_URL`: referencia a la variable `DATABASE_URL` del servicio PostgreSQL de Railway.
+- `DATABASE_URL`: cadena de conexión al PostgreSQL Flexible Server privado de Azure.
 - `CORS_ORIGINS`: URL pública exacta del frontend de Vercel, sin `/` final.
 - `DATA_ENCRYPTION_KEY`: conserva la clave privada de cifrado de cuentas y recorridos.
 - `AI_PROVIDER=local`: la detección usa `best.pt`, sin Gemini ni modelos genéricos.
 - `POTHOLE_MODEL_PATH=models/best.pt`, `YOLO_CONFIDENCE=0.25`, `YOLO_POTHOLE_CLASS_ID=0`.
 - `NOMINATIM_USER_AGENT`: identificador de esta aplicación y contacto del operador.
 
-Railway proporciona `PORT`; el contenedor escucha en `0.0.0.0:$PORT`. El healthcheck es `/api/health`.
+Container Apps proporciona `PORT`; el contenedor escucha en `0.0.0.0:$PORT`. El healthcheck es `/api/health`.
 
 El archivo `.env.example` documenta las variables. No subas `.env` ni claves al repositorio.
 
@@ -71,4 +71,4 @@ Consulta [GRAFOS.md](docs/GRAFOS.md) para las fuentes académicas consultadas en
 
 ## Preparación para Azure
 
-La [guía de Azure](azure/README.md) documenta la instalación independiente publicada en [Azure Container Apps](https://bachescanai-app.wittyhill-59fbb47a.westus.azurecontainerapps.io/): frontend TypeScript y API Python con YOLO bajo una dirección HTTPS y PostgreSQL privado con base de datos nueva. Incluye la versión de la imagen, las comprobaciones realizadas, la plantilla ARM y las instrucciones para actualizar conservando los secretos. Vercel/Railway continúa como instalación independiente.
+La [guía de Azure](azure/README.md) documenta la instalación independiente publicada en [Azure Container Apps](https://bachescanai-app.wittyhill-59fbb47a.westus.azurecontainerapps.io/): frontend TypeScript y API Python con YOLO bajo una dirección HTTPS y PostgreSQL privado con base de datos nueva. Incluye la versión de la imagen, las comprobaciones realizadas, la plantilla ARM y las instrucciones para actualizar conservando los secretos. Vercel reenvía las solicitudes `/api` a este backend de Azure.
