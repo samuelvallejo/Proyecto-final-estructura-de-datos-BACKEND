@@ -53,6 +53,7 @@ class PotholeDetector:
         self.class_id = settings.yolo_pothole_class_id
         self.confidence = settings.yolo_confidence
         self.image_size = settings.yolo_image_size
+        self.live_image_size = getattr(settings, 'yolo_live_image_size', settings.yolo_image_size)
         self.lock = threading.Lock()
         try:
             path = Path(settings.pothole_model_path)
@@ -87,7 +88,10 @@ class PotholeDetector:
                 raise ValueError('unexpected_class_label')
             if model_factory is None:
                 with Image.new('RGB', (640, 640), '#888888') as blank:
-                    self.detect(blank)  # Initialize predictor once, before serving concurrent requests.
+                    # Inicializa el predictor y precalienta ambas resoluciones antes de atender peticiones.
+                    self.detect(blank)
+                    if self.live_image_size != self.image_size:
+                        self.detect(blank, self.live_image_size)
         except Exception:
             self.model = None
             logger.error('custom_pothole_model_unavailable')
@@ -96,13 +100,14 @@ class PotholeDetector:
     def ready(self):
         return self.model is not None
 
-    def detect(self, image: Image.Image):
+    def detect(self, image: Image.Image, image_size: int | None = None):
         if not self.ready:
             raise ModelUnavailable(MODEL_UNAVAILABLE)
         # Ultralytics mutates its predictor; serialize all photo/live calls on this shared instance.
         with self.lock:
             predictions = self.model.predict(source=image, conf=self.confidence, device=self.device,
-                classes=[self.class_id], imgsz=self.image_size, max_det=100, iou=.45,
+                classes=[self.class_id], imgsz=image_size or self.image_size, max_det=100, iou=.45,
+                half=self.device.startswith('cuda'),
                 save=False, save_txt=False, show=False, verbose=False)
             result = predictions[0]
             detections = []
@@ -121,8 +126,8 @@ class PotholeDetector:
                                        'bbox': [round(v, 3) for v in (xmin, ymin, xmax, ymax)]})
             return {'total_baches': len(detections), 'ancho': image.width, 'alto': image.height, 'detecciones': detections}
 
-    def analyze(self, image: Image.Image) -> Analysis:
-        result = self.detect(image)
+    def analyze(self, image: Image.Image, image_size: int | None = None) -> Analysis:
+        result = self.detect(image, image_size)
         hits = []
         for item in result['detecciones'][:20]:
             xmin, ymin, xmax, ymax = item['bbox']

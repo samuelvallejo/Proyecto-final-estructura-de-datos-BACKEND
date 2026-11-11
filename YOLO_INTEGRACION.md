@@ -2,7 +2,7 @@
 
 ## Arquitectura conservada
 
-El frontend existente es React 19 + TypeScript con Vite. FastAPI sigue siendo la API y SQLAlchemy/Alembic gestionan PostgreSQL. El navegador llama a `/api` con su cookie HttpOnly: Vite reenvía a localhost:3001 y Vercel reenvía a Railway. No se necesita abrir CORS adicional para la carga de fotos. El login y las comprobaciones de origen continúan siendo obligatorios.
+El frontend existente es React 19 + TypeScript con Vite. FastAPI sigue siendo la API y SQLAlchemy/Alembic gestionan PostgreSQL. El navegador llama a `/api` con su cookie HttpOnly: Vite reenvía a localhost:3001 y Vercel reenvía a Azure Container Apps. No se necesita abrir CORS adicional para la carga de fotos. El login y las comprobaciones de origen continúan siendo obligatorios.
 
 `app/pothole_detector.py` carga una sola instancia de `YOLO` por proceso durante el inicio. La misma instancia atiende `/api/detect/potholes` y la cámara `/api/scan`, sin recargar pesos por petición. La cola FIFO existente limita trabajos y la inferencia se ejecuta en threads; un lock protege el predictor compartido. Las imágenes y predicciones no se guardan en disco ni se envían a un servicio de IA externo.
 
@@ -14,7 +14,7 @@ El frontend existente es React 19 + TypeScript con Vite. FastAPI sigue siendo la
 - **Sus nombres reales son `{0: '0'}`**, no `{0: 'pothole'}`. Dado que el usuario describe estos pesos como entrenados específicamente para baches, se configura `YOLO_POTHOLE_CLASS_ID=0` y la API devuelve esa clase como `pothole`. El código no modifica ni reentrena los pesos ni inventa que su metadata contiene ese nombre.
 - Se verifica la huella antes de cargar. Un archivo ausente, distinto o con clase inesperada produce una respuesta 503; no se descarga ni se usa un modelo genérico. Si sustituyes voluntariamente los pesos, configura su nueva huella y clase después de verificarlos.
 
-`YOLO_CONFIDENCE=0.25`, `YOLO_IMAGE_SIZE=640`, `YOLO_CPU_THREADS=2`. `YOLO_DEVICE=auto` usa CUDA si `torch.cuda.is_available()`; en otro caso usa CPU. `cpu` o `cuda` fuerzan el dispositivo. El Dockerfile instala las ruedas CPU de PyTorch para Railway, que no tiene GPU en este despliegue. Para usar una GPU local, instala una combinación torch/torchvision con soporte CUDA compatible con tu driver según [PyTorch](https://pytorch.org/get-started/locally/). La prueba de esta entrega se ejecutó en CPU.
+`YOLO_CONFIDENCE=0.25`, `YOLO_IMAGE_SIZE=640`, `YOLO_CPU_THREADS=2`. `YOLO_DEVICE=auto` usa CUDA si `torch.cuda.is_available()`; en otro caso usa CPU. `cpu` o `cuda` fuerzan el dispositivo. El Dockerfile instala las ruedas CPU de PyTorch para Azure Container Apps, configurado con CPU. Para usar una GPU local, instala una combinación torch/torchvision con soporte CUDA compatible con tu driver según [PyTorch](https://pytorch.org/get-started/locally/). La prueba de esta entrega se ejecutó en CPU.
 
 ## Dependencias y ejecución
 

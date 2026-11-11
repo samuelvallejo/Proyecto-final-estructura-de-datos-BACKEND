@@ -93,7 +93,7 @@ def test_camera_uses_exclusively_custom_weights(monkeypatch, custom_detector):
 def test_camera_missing_custom_model_never_falls_back(monkeypatch):
     from app.pothole_detector import ModelUnavailable
     class Missing:
-        def analyze(self, image):
+        def analyze(self, image, image_size=None):
             raise ModelUnavailable('model unavailable')
     monkeypatch.setattr('app.ai.PotholeDetector', lambda settings: Missing())
     async def run():

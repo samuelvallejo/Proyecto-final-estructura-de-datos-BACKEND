@@ -1,12 +1,13 @@
 import json
+from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select, func, update
 from sqlalchemy.dialects.postgresql import insert
-from .auth import current_session, FAILURE
+from .auth import current_session, FAILURE, audit
 from .contracts import Position
-from .repository import distance
+from .repository import distance, nearby_potholes, record_passes
 from . import schema as s
 
 
@@ -16,6 +17,8 @@ class TripCreate(BaseModel):
     pointA: str = Field(min_length=2, max_length=120)
     pointB: str = Field(min_length=2, max_length=120)
     position: Position
+    # Sesión de conducción: vehículo usado durante el escaneo automático.
+    vehicle: Literal['moto', 'carro'] | None = None
 
     @field_validator('name', 'pointA', 'pointB')
     @classmethod
@@ -64,15 +67,30 @@ def link_reports(engine, trip_id, session_id, reports):
                          .on_conflict_do_nothing(index_elements=['trip_id', 'report_id']))
 
 
+def trip_metrics(conn, trip_id):
+    report_count = conn.execute(select(func.count()).select_from(s.trip_reports)
+                               .where(s.trip_reports.c.trip_id == trip_id)).scalar_one()
+    detected = set(conn.execute(select(s.reports.c.pothole_id).select_from(s.trip_reports.join(s.reports))
+                                .where(s.trip_reports.c.trip_id == trip_id)).scalars())
+    passed = set(conn.execute(select(s.pothole_passes.c.pothole_id).where(s.pothole_passes.c.trip_id == trip_id)).scalars())
+    return {'reportCount': report_count, 'passCount': len(passed), 'potholeCount': len(detected | passed)}
+
+
+def path_length(points):
+    return round(sum(distance(a, b) for a, b in zip(points, points[1:])))
+
+
 def serialize(request, conn, row, details=False):
     data = json.loads(request.app.state.vault.decrypt(row['encrypted_details']))
-    report_count = conn.execute(select(func.count()).select_from(s.trip_reports)
-                               .where(s.trip_reports.c.trip_id == row['id'])).scalar_one()
-    result = {**data, 'id': row['id'], 'startedAt': row['created_at'], 'endedAt': row['ended_at'], 'reportCount': report_count}
+    finished = row['ended_at'] or s.now()
+    result = {**data, 'id': row['id'], 'startedAt': row['created_at'], 'endedAt': row['ended_at'],
+              'durationMs': max(0, finished - row['created_at']), **trip_metrics(conn, row['id'])}
+    result.setdefault('vehicle', None)
     if details:
         samples = conn.execute(select(s.trip_samples.c.encrypted_position).where(s.trip_samples.c.trip_id == row['id'])
                               .order_by(s.trip_samples.c.created_at, s.trip_samples.c.id).limit(10000)).scalars().all()
         result['path'] = [json.loads(request.app.state.vault.decrypt(point)) for point in samples]
+        result['distanceMeters'] = path_length(result['path'])
         rows = conn.execute(request.app.state.repo.query().join(s.trip_reports, s.trip_reports.c.report_id == s.reports.c.id)
                             .where(s.trip_reports.c.trip_id == row['id']).order_by(s.reports.c.created_at)).mappings().all()
         result['reports'] = [request.app.state.repo.serialize(report) for report in rows]
@@ -102,6 +120,7 @@ def create_trip(payload: TripCreate, request: Request, session=Depends(current_s
         row = conn.execute(s.trips.insert().values(user_id=session['user_id'], session_id=session['id'],
                            encrypted_details=vault.encrypt(json.dumps(data))).returning(s.trips)).mappings().one()
         conn.execute(s.trip_samples.insert().values(trip_id=row['id'], encrypted_position=vault.encrypt(json.dumps(payload.position.model_dump()))))
+        audit(conn, session['id'], 'trip.started', row['id'], {'vehicle': payload.vehicle})
         return serialize(request, conn, row, details=True)
 
 
@@ -124,12 +143,16 @@ def save_sample(trip_id: UUID, payload: Sample, request: Request, session=Depend
         count = conn.execute(select(func.count()).select_from(s.trip_samples).where(s.trip_samples.c.trip_id == str(trip_id))).scalar_one()
         if count >= 10000:
             raise HTTPException(429, 'Se alcanzó el límite del recorrido. Finalízalo para empezar otro.')
+        position = payload.position.model_dump()
+        passed = record_passes(conn, session['user_id'], session['id'],
+                               nearby_potholes(conn, position, request.app.state.settings.pass_radius_meters),
+                               'trip', str(trip_id)) if position['accuracy'] <= 50 else []
         previous = conn.execute(select(s.trip_samples).where(s.trip_samples.c.trip_id == str(trip_id))
                                 .order_by(s.trip_samples.c.created_at.desc()).limit(1)).mappings().first()
         if previous and (s.now() - previous['created_at'] < 2000 or distance(json.loads(vault.decrypt(previous['encrypted_position'])), payload.position.model_dump()) < 5):
-            return {'message': 'Todo se ejecutó correctamente.'}
+            return {'message': 'Todo se ejecutó correctamente.', 'passed': len(passed)}
         conn.execute(s.trip_samples.insert().values(trip_id=str(trip_id), encrypted_position=vault.encrypt(json.dumps(payload.position.model_dump()))))
-    return {'message': 'Todo se ejecutó correctamente.'}
+    return {'message': 'Todo se ejecutó correctamente.', 'passed': len(passed)}
 
 
 @router.post('/{trip_id}/finish')
@@ -147,4 +170,7 @@ def finish_trip(trip_id: UUID, payload: Finish, request: Request, session=Depend
         conn.execute(s.trip_samples.insert().values(trip_id=str(trip_id), encrypted_position=vault.encrypt(json.dumps(end))))
         updated = conn.execute(update(s.trips).where(s.trips.c.id == str(trip_id)).values(ended_at=s.now(),
                                encrypted_details=vault.encrypt(json.dumps(data))).returning(s.trips)).mappings().one()
-        return serialize(request, conn, updated, details=True)
+        result = serialize(request, conn, updated, details=True)
+        audit(conn, session['id'], 'trip.finished', str(trip_id), {'durationMs': result['durationMs'],
+              'potholes': result['potholeCount'], 'distanceMeters': result['distanceMeters']})
+        return result

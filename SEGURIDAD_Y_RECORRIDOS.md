@@ -14,9 +14,9 @@ El propietario del navegador puede inspeccionar sus propias entradas, cookies y 
 
 ## Configuración
 
-Configura una clave Fernet de 32 bytes codificada en base64 en `DATA_ENCRYPTION_KEY` desde las variables privadas de Railway. Conserva un respaldo seguro: cambiar o perder esta clave impide leer los datos cifrados. Nunca incluyas la clave en Git. `SECURE_COOKIES=true` en producción y `false` únicamente en localhost. Ejecuta `alembic upgrade head`: las migraciones 0002 y 0003 conservan el esquema original y los reportes existentes, y agregan cuentas cifradas y recorridos (47 tablas).
+Configura una clave Fernet de 32 bytes codificada en base64 en `DATA_ENCRYPTION_KEY` desde los secretos privados de Azure Container Apps. Conserva un respaldo seguro: cambiar o perder esta clave impide leer los datos cifrados. Nunca incluyas la clave en Git. `SECURE_COOKIES=true` en producción y `false` únicamente en localhost. Ejecuta `alembic upgrade head`: las migraciones 0002 y 0003 conservan el esquema original y los reportes existentes, y agregan cuentas cifradas y recorridos (47 tablas).
 
-El frontend debe usar `/api` en el mismo origen. Vercel reenvía estas rutas a Railway y Vite a localhost:3001, para que Safari no dependa de cookies de terceros. `CORS_ORIGINS` debe incluir el dominio exacto del frontend. No es necesario `VITE_API_URL` con este flujo.
+El frontend debe usar `/api` en el mismo origen. Vercel reenvía estas rutas a Azure Container Apps y Vite a localhost:3001, para que Safari no dependa de cookies de terceros. `CORS_ORIGINS` debe incluir el dominio exacto del frontend. No es necesario `VITE_API_URL` con este flujo.
 
 ## Recorridos y YOLO
 

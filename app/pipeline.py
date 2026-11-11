@@ -59,12 +59,19 @@ class ScanPipeline:
             self.latencies.popleft()
 
     def stats(self):
+        samples = sorted(self.latencies.items)
+        total_latency = {
+            'samples': len(samples),
+            'p50': samples[(len(samples) - 1) // 2] if samples else None,
+            'p95': samples[max(0, (95 * len(samples) + 99) // 100 - 1)] if samples else None,
+        }
         return {
             'singlyLinkedList': {'size': self.timeline.size, 'use': 'Eventos de escaneo en orden de llegada'},
             'doublyLinkedList': {'size': self.history.size, 'use': 'Historial de resultados en ambos sentidos'},
             'circularSinglyLinkedList': {'size': self.workers.size, 'use': 'Asignación round robin de trabajadores'},
             'queue': {'size': sum(q.size for q in self.queues), 'runningAndQueued': self.pending, 'use': 'Trabajos de análisis FIFO por trabajador'},
             'deque': {'size': self.latencies.size, 'use': 'Ventana de latencias de los últimos 100 análisis'},
+            'totalLatencyMs': total_latency,
         }
 
     async def close(self):

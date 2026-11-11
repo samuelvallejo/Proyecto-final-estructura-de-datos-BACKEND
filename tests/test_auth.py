@@ -33,7 +33,9 @@ def test_registration_login_cookie_and_access_control(client):
     reply = client.post('/api/auth/register', json=registration)
     assert reply.status_code == 201 and reply.json() == {'message': 'Todo se ejecutó correctamente.'}
     with client.app.state.engine.connect() as conn:
-        row = conn.execute(select(s.users)).mappings().one()
+        # Las cuentas demo también existen: buscar la cuenta registrada por su identificador cifrado.
+        row = conn.execute(select(s.users).where(s.users.c.email_lookup == client.app.state.vault.lookup(
+            'email:private@example.com'))).mappings().one()
         assert credentials['email'].lower() not in row['email']
         assert row['display_name'] != registration['displayName']
         assert credentials['password'] not in row['password_hash']

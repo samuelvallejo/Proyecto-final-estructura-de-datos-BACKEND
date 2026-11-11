@@ -66,7 +66,8 @@ def scan(client, headers, coords=None, data=None):
 
 
 def test_migration_scan_persistence_deduplication_and_geography(client):
-    assert client.get('/api/health').json() == {'status': 'ok', 'database': 'up'}
+    health = client.get('/api/health').json()
+    assert health['status'] == 'ok' and health['database'] == 'up' and health['model'] == 'ready'
     headers = token(client)
     async def geocode(position):
         return {'cacheKey': f'{position.lat:.4f},{position.lng:.4f}', 'source': 'nominatim',
@@ -93,10 +94,16 @@ def test_migration_scan_persistence_deduplication_and_geography(client):
         for relation in [s.countries, s.regions, s.cities, s.neighborhoods, s.roads, s.zones, s.reports,
                          s.potholes, s.risk_assessments, s.audit_events, s.status_events]:
             expected = count if relation.name in ('reports', 'potholes', 'risk_assessments', 'audit_events', 'status_events') else 1
-            assert conn.execute(select(func.count()).select_from(relation)).scalar_one() == expected
+            # La huella de sesión también guarda inicios de sesión, escaneos y pasos: contar solo reportes creados.
+            where = [s.audit_events.c.action == 'report.created'] if relation is s.audit_events else []
+            assert conn.execute(select(func.count()).select_from(relation).where(*where)).scalar_one() == expected
         assert conn.execute(select(func.count()).select_from(s.analyses)).scalar_one() == 2 * count
     # Nueva instancia del repositorio: reportes independientes de las estructuras en memoria.
-    assert Repository(engine, client.app.state.repo.settings).get_report(report['id']) == report
+    # El segundo escaneo del mismo hueco suma un paso; el resto del reporte es idéntico.
+    stored = Repository(engine, client.app.state.repo.settings).get_report(report['id'])
+    volatile = {'passCount', 'peopleCount', 'lastPassAt'}
+    assert {k: v for k, v in stored.items() if k not in volatile} == {k: v for k, v in report.items() if k not in volatile}
+    assert stored['peopleCount'] == 1
     stats = client.get('/api/data-structures/stats').json()
     assert stats['singlyLinkedList']['size'] == 2
     assert len(client.get('/api/scans/history', headers=headers).json()['events']) == 2
@@ -145,7 +152,7 @@ def test_rate_limit_and_concurrent_registration(client):
 def test_priority_pagination_and_bidirectional_patrol(client):
     headers = token(client)
     scores = iter([25, 90, 65])
-    async def fake_ai(data, image):
+    async def fake_ai(data, image, live=False):
         result = Analysis(isPothole=True, potholeType='BACHE', hazardScore=next(scores),
                           aiDescription='Daño visible', riskFactors=['Bordes irregulares'])
         return result, 'gemini', 'test-model', False

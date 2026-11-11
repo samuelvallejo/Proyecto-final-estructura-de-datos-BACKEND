@@ -1,0 +1,76 @@
+# Despliegue independiente de BacheScan en Azure
+
+Esta es la instalación de producción del backend en Azure for Students. Vercel sirve el frontend y reenvía las llamadas `/api` a Azure. PostgreSQL también está alojado en Azure.
+
+## Instalación publicada
+
+- Aplicación: https://bachescanai-app.wittyhill-59fbb47a.westus.azurecontainerapps.io/
+- Grupo `rg-bachescan-ai`, recursos en `westus`; revisión `bachescanai-app--douxyo8` en ejecución y con el 100 % del tráfico.
+- Backend de la imagen: `70da465365623f31871d7be45e7a7fc7cfdaea1b`; frontend: `fcb5e0f3d3ca97ca319ce19857f56b808b721bcb`.
+- Imagen privada: `bachescanai4udjwwdxkco7m.azurecr.io/bachescan:azure-70da465365623f31871d7be45e7a7fc7cfdaea1b`.
+- Digest publicado: `sha256:b1f2d605f40e3451ab19e9e9282ad173ba4b4cb711fc401d9986d805ddb32f5c`.
+- [Compilación correcta de GitHub Actions](https://github.com/samuelvallejo/Proyecto-final-estructura-de-datos-BACKEND/actions/runs/40979903938).
+
+Verificación del 29 de octubre de 2026: HTTPS, web, cabeceras, API protegida, registro/inicio de sesión con mensajes genéricos, cookie Secure/HttpOnly, consultas PostgreSQL de reportes/árboles/grafos, detección de fotografía y fotograma de escaneo con `best.pt`, y revocación de sesión. Se usaron cuentas de prueba y no se crearon reportes con ubicaciones ficticias. La prueba por API del escaneo no sustituye una prueba de cámara y GPS en un teléfono en la calle.
+
+## Arquitectura revisable
+
+`azuredeploy.json` define 11 recursos (10 activos cuando `buildImageInAzure=false`) en un grupo nuevo `rg-bachescan-ai`:
+
+| Recurso | Configuración |
+| --- | --- |
+| Azure Container Apps | Consumption, 1 vCPU, 2 GiB, 1 réplica mínima y 2 máximas; HTTPS público, puerto interno 3001 |
+| Entorno de Container Apps | Perfil Consumption, red virtual propia; sin GPU, perfil dedicado o endpoint privado de ACA |
+| Azure Container Registry | Standard, imágenes privadas, autenticación por identidad; sin usuario administrador |
+| ACR Task Run opcional | Deshabilitado por defecto: esta suscripción devuelve TasksOperationsNotAllowed |
+| PostgreSQL Flexible Server | PostgreSQL 17, Burstable B1ms, 32 GiB, respaldo de 7 días, sin alta disponibilidad o crecimiento automático |
+| Base `bachescan` | Creada vacía; Alembic aplica las migraciones al arrancar el contenedor |
+| Red virtual | Subred de contenedores y subred delegada a PostgreSQL |
+| Zona DNS privada y vínculo | Permiten resolver el servidor PostgreSQL dentro de la red |
+| Identidad administrada y rol | AcrPull únicamente sobre el registro de este despliegue |
+
+El frontend TypeScript y la API Python se sirven en **el mismo origen HTTPS**. El Dockerfile fija el commit del frontend `23e3a5b871d4290920a0bdc8df3292553b3ffdbe`, ejecuta `npm ci` y compila `dist`. El backend conserva YOLO con `models/best.pt` y CPU; no descarga otro detector. La inferencia usa 512 px y dos hilos de CPU; el servicio mantiene al menos una réplica para evitar el arranque en frío y escala hasta dos cuando sube la concurrencia. Se ejecuta como usuario sin privilegios. El acceso a PostgreSQL es privado y usa TLS. Contraseñas y clave Fernet son parámetros `secureString` y secretos de Container Apps, nunca salidas ni archivos públicos.
+
+`STATIC_ROOT` activa el servicio estático opcional. Las rutas API conservan sus sesiones y permisos. La web incluye las cabeceras para permitir cámara/GPS del mismo origen y bloquear inclusión en otros sitios. No se necesita modificar `VITE_API_URL`, guardar tokens en el frontend o conceder a Azure acceso de escritura a GitHub: El workflow revisado lee el código público y sube la imagen al registro privado mediante una identidad federada de la rama de Azure.
+
+## Costes y autorización
+
+Se debe revisar y autorizar el consumo de crédito **antes de crear los recursos**. La oferta de estudiante publicada incluye, para clientes elegibles, un registro Standard durante 12 meses y PostgreSQL B1ms hasta 750 horas/mes con 32 GiB de datos y respaldo. Container Apps incluye 180000 vCPU-segundos, 360000 GiB-segundos y 2 millones de solicitudes al mes por suscripción. Esas cuotas se comparten entre aplicaciones de la suscripción y no cubren una réplica permanente de 1 vCPU/2 GiB durante todo el mes.
+
+Mantener 1 réplica evita la espera de arranque y carga inicial del modelo, pero implica consumo de cómputo continuo, incluso cuando nadie escanea. Con 1 vCPU y 2 GiB, una réplica encendida todo el mes supera las cuotas mensuales gratuitas típicas de Container Apps; el crédito estudiantil puede cubrir parte o todo el excedente según saldo, elegibilidad y uso compartido. La segunda réplica solo aparece con concurrencia y puede añadir cargos. La red/DNS, compilaciones, transferencia y uso superior a las cuotas también pueden consumir crédito. Esto **no es una garantía de coste cero ni un límite duro de gasto**. No se cambia la suscripción a pago por uso. No hay apagado automático de PostgreSQL o del registro. Para limitar el gasto se puede volver a `minReplicas: 0`, aceptando el arranque en frío.
+
+Referencias oficiales consultadas el 29 de octubre de 2026:
+
+- [Azure for Students: servicios y cuotas](https://azure.microsoft.com/en-us/free/students/)
+- [Facturación de Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/billing)
+- [Precios de Azure Container Registry](https://azure.microsoft.com/en-us/pricing/details/container-registry/)
+- [Compilar ACR Tasks desde una plantilla ARM](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-task-run-template)
+- [Desplegar una plantilla desde el portal](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/deploy-portal)
+
+## Publicación desde el portal
+
+1. Revisar el código y publicar esta rama del backend. Seleccionar su SHA completo, no un identificador mutable, para la compilación real.
+2. Crear una sola vez las credenciales locales con `python azure/new_parameters.py --backend-ref SHA`. Por defecto se guardan en el perfil del usuario, dentro de `.bachescan-azure/parameters.private.json`, fuera de OneDrive y Git. No sobrescribir ese archivo al actualizar una instalación.
+3. Azure Portal → buscar **Template Deployment (implementar mediante plantillas personalizadas)** → **Cree su propia plantilla en el editor** → **Cargar archivo**, seleccionar `azure/azuredeploy.json` y guardar el borrador.
+4. Seleccionar la suscripción autorizada, grupo nuevo `rg-bachescan-ai`, región admitida (West US, `westus`, confirmada en la política de esta suscripción) y prefijo `bachescanai`.
+5. Tras la autorización del usuario, introducir la contraseña nueva y la clave Fernet en los campos seguros del formulario, y fijar backendRef al SHA publicado. No copiarlos a un repositorio, URL o documento público. La plantilla no tiene credenciales predeterminadas y no se puede usar sin configurar esos campos.
+6. **Revisar y crear**, comprobar permisos y validación, resolver restricciones de región/cuotas si aparecen y crear únicamente los recursos aprobados. Azure puede requerir registrar los proveedores Microsoft.App, Microsoft.ContainerRegistry, Microsoft.DBforPostgreSQL, Microsoft.Network y Microsoft.ManagedIdentity.
+7. Esperar a que la compilación de GitHub Actions y el despliegue finalicen; abrir la salida `applicationUrl`. Comprobar `/api/health`, registro/inicio de sesión, detector con `best.pt`, mapas y grafos. El primer acceso después de un escalado a cero puede tardar por el arranque del modelo.
+
+La plantilla pasó la validación de esta suscripción. La imagen publicada se compiló realmente en GitHub Actions y se subió a ACR; las comprobaciones de esta instalación se indican arriba. Una validación local de JSON por sí sola no confirma futuras publicaciones.
+
+## Actualizaciones y protección de datos
+
+Conservar `databasePassword` y `dataEncryptionKey`, nombres del servidor y grupo existentes. Cambiar el SHA de backend, el SHA de frontend e `imageTag` cuando corresponda, y ejecutar la plantilla en modo **Incremental**. No usar el modo Complete. Cambiar o perder la clave impide descifrar los datos ya guardados.
+
+Pruebas locales: `python -m pytest tests/test_web.py -q`. Comprueban index, API JSON, prioridad de rutas, caché de assets y worker, cabeceras y archivos ausentes. El Dockerfile requiere una compilación Linux en ACR o Docker; no se ha instalado Docker en el PC para esta preparación.
+
+## Compilación alternativa para esta suscripción
+
+La primera ejecución confirmó que `ACR Tasks` devuelve `TasksOperationsNotAllowed`. Se conserva el registro privado y se prepara `.github/workflows/azure-image.yml`, que compila en un runner Linux de GitHub y sube la imagen a ese registro. `azure/github-build-identity.json` define tres recursos adicionales: identidad `bachescanai-build`, federación OIDC limitada exactamente al repositorio y rama `codex/azure-deployment`, y rol **AcrPush solo en el registro**. Estos permisos nuevos requieren autorización del usuario antes de crearlos.
+
+Configurar las variables de Actions `AZURE_BUILD_CLIENT_ID`, `AZURE_TENANT_ID` y `AZURE_SUBSCRIPTION_ID` con las salidas de esa plantilla. Son identificadores, no contraseñas. La contraseña PostgreSQL y la clave Fernet no se envían a GitHub. El token OIDC es temporal, no se crea una contraseña de cliente y la identidad no tiene permiso para consultar o cambiar la base de datos ni desplegar otras aplicaciones. Actions usa versiones fijadas por SHA, `contents: read`, `id-token: write` y no mantiene credenciales de checkout.
+
+La imagen resultante se etiqueta `azure-SHA_DEL_COMMIT_DEL_BACKEND`. Tras un workflow correcto, usar ese valor en `imageTag`, mantener `buildImageInAzure=false` y volver a aplicar `azuredeploy.json` en modo Incremental con los secretos existentes. La tarea de ACR opcional no se ejecuta. Los recursos ya creados se reutilizan.
+
+GitHub utiliza el asunto OIDC inmutable `repo:samuelvallejo@230025659/Proyecto-final-estructura-de-datos-BACKEND@1403716665:ref:refs/heads/codex/azure-deployment`. La federación de Azure coincide exactamente con ese asunto, sin comodines ni acceso a otras ramas. Véase la [referencia oficial de OIDC](https://docs.github.com/en/actions/reference/security/oidc).

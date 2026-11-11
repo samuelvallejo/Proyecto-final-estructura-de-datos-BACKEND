@@ -19,11 +19,15 @@ from .pipeline import ScanPipeline
 from .repository import Repository
 from .structures import CircularDoublyLinkedList
 from . import schema as s
-from .auth import router as auth_router, Vault, password_hash, scan_owner, current_session
+from .auth import router as auth_router, Vault, password_hash, scan_owner, current_session, seed_demo_accounts, audit
 from .trips import router as trip_router, validate_scan_trip, link_reports
 from .community import router as community_router
 from .tree_api import router as tree_router
 from .graph_api import router as graph_router
+from .migration_api import router as migration_router
+from .profile import router as profile_router, log_scan
+from .admin import router as admin_router
+from .web import mount_frontend
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +44,10 @@ def create_app(settings=None):
                                hide_parameters=True, connect_args={'connect_timeout': 5})
         with engine.connect() as conn:
             version = conn.execute(text('SELECT version_num FROM alembic_version')).scalar_one()
-            if version not in ('0002', '0003'):
+            if version != '0004':
                 raise RuntimeError('Ejecuta alembic upgrade head antes de iniciar la API.')
         app.state.engine = engine
+        seed_demo_accounts(engine, app.state.vault, settings)
         app.state.repo = Repository(engine, settings)
         app.state.ai = await asyncio.to_thread(AIService, settings)
         app.state.detector = app.state.ai.local
@@ -63,6 +68,9 @@ def create_app(settings=None):
     app.include_router(community_router)
     app.include_router(tree_router)
     app.include_router(graph_router)
+    app.include_router(migration_router)
+    app.include_router(profile_router)
+    app.include_router(admin_router)
     app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()],
                        allow_credentials=True, allow_methods=['GET', 'POST'],
                        allow_headers=['Content-Type'], expose_headers=['Retry-After'])
@@ -100,9 +108,9 @@ def create_app(settings=None):
     async def upload_limit(request, call_next):
         if request.url.path.startswith('/api/') and request.method == 'POST':
             origins = {origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()}
-            if request.headers.get('origin') not in origins:
+            if request.url.path not in ('/api/migration/import', '/api/migration/export') and request.headers.get('origin') not in origins:
                 return JSONResponse({'error': 'No se pudo completar la operación.'}, status_code=403)
-        if (request.url.path.startswith('/api/auth/') or request.url.path.startswith('/api/trips') or request.url.path.startswith('/api/community/')) and request.method == 'POST':
+        if request.url.path.startswith(('/api/auth/', '/api/trips', '/api/community/', '/api/passes', '/api/admin/')) and request.method == 'POST':
             length = request.headers.get('content-length', '0')
             if not length.isdigit() or int(length) > 8192:
                 return JSONResponse({'error': 'No se pudo completar la operación.'}, status_code=413)
@@ -128,11 +136,14 @@ def create_app(settings=None):
 
     @app.get('/api/health')
     def health():
-        database_status = 'up'
-        with app.state.engine.connect() as conn:
-            conn.execute(text('SELECT 1'))
-            count = conn.execute(select(func.count()).select_from(s.reports)).scalar_one()
-        return {'status': 'ok', 'database': database_status}
+        # Comprobación real: si PostgreSQL no responde, el servicio informa 503 y 'down'.
+        try:
+            with app.state.engine.connect() as conn:
+                conn.execute(text('SELECT 1'))
+        except SQLAlchemyError as exc:
+            logger.error('health_database_down: %s', type(exc).__name__)
+            return JSONResponse({'status': 'degraded', 'database': 'down'}, status_code=503)
+        return {'status': 'ok', 'database': 'up', 'model': 'ready' if app.state.detector.ready else 'unavailable'}
 
     @app.post('/api/sessions', status_code=201)
     def new_session():
@@ -140,7 +151,8 @@ def create_app(settings=None):
 
     @app.post('/api/scan')
     async def scan(frame: UploadFile = File(), lat: str | None = Form(None), lng: str | None = Form(None),
-                   accuracy: str | None = Form(None), tripId: str | None = Form(None, max_length=36), owner: str = Depends(session_id)):
+                   accuracy: str | None = Form(None), tripId: str | None = Form(None, max_length=36),
+                   mode: str = Form('live', pattern='^(live|still)$'), owner: str = Depends(session_id)):
         if not app.state.detector.ready:
             raise HTTPException(503, MODEL_UNAVAILABLE)
         if tripId:
@@ -170,7 +182,7 @@ def create_app(settings=None):
             started = time.monotonic()
             provider = 'unknown'
             try:
-                analysis, provider, model, fallback = await app.state.ai.analyze(data, image)
+                analysis, provider, model, fallback = await app.state.ai.analyze(data, image, live=mode == 'live')
                 zone = await app.state.geocoder.resolve(position) if analysis.isPothole and position else None
                 duration = round((time.monotonic() - started) * 1000)
                 observations = [Analysis(isPothole=True, **detection.model_dump()) for detection in analysis.detections] if analysis.detections else [analysis]
@@ -192,13 +204,16 @@ def create_app(settings=None):
                 event = {'sessionId': owner, 'analysisId': analysis_id, 'provider': provider,
                          'isPothole': analysis.isPothole, 'reportId': report['id'] if report else None, 'timestamp': s.now()}
                 app.state.pipeline.remember(event, duration)
+                if analysis.isPothole:
+                    await asyncio.to_thread(log_scan, app.state.engine, owner, len(observations), provider)
                 note = None
                 if analysis.isPothole and not position:
                     note = 'Falta GPS válido con precisión de hasta ±100 m. El daño se analizó, pero no se ubicó en el mapa.'
                 return {'result': analysis.result(), 'provider': provider, 'fallback': fallback,
                         'detections': detections if analysis.isPothole else [], 'reports': saved_reports,
                         'report': report, 'existing': existing, 'locationNote': note,
-                        'nextScanMs': max(round((settings.scan_interval_seconds if provider == 'gemini' else settings.local_scan_interval_seconds) * 1000), 6000 if provider == 'gemini' else 1500)}
+                        'durationMs': duration,
+                        'nextScanMs': max(round((settings.scan_interval_seconds if provider == 'gemini' else settings.local_scan_interval_seconds) * 1000), 6000 if provider == 'gemini' else 250)}
             except Exception:
                 await asyncio.to_thread(app.state.repo.finish_usage, usage_id, provider, True)
                 raise
@@ -244,6 +259,11 @@ def create_app(settings=None):
                     raise HTTPException(400, str(exc)) from None
                 result = await asyncio.to_thread(app.state.detector.detect, decoded)
                 await asyncio.to_thread(app.state.repo.finish_usage, usage_id, 'custom-yolov8')
+
+                def remember_photo():
+                    with app.state.engine.begin() as conn:
+                        audit(conn, owner, 'photo.analyzed', details={'detections': result['total_baches']})
+                await asyncio.to_thread(remember_photo)
                 return result
             except Exception:
                 await asyncio.to_thread(app.state.repo.finish_usage, usage_id, 'custom-yolov8', True)
@@ -313,6 +333,7 @@ def create_app(settings=None):
     @app.get('/api/data-structures/stats', dependencies=[Depends(current_session)])
     def stats():
         return {**app.state.pipeline.stats(),
+                'modelLatencyMs': app.state.ai.latency_summary(),
                 'array': {'use': 'Tensor NumPy NCHW de imagen y arrays de reportes paginados'},
                 'circularDoublyLinkedList': {'use': 'Recorrido circular de baches prioritarios: anterior y siguiente'},
                 'stack': {'use': 'Historial LIFO de navegación en el frontend'},
@@ -321,6 +342,7 @@ def create_app(settings=None):
                 'graph': {'use': 'Red de cercanía entre baches: listas de adyacencia, BFS, DFS y Dijkstra'},
                 'persistence': 'PostgreSQL; las estructuras de ejecución son temporales por proceso'}
 
+    mount_frontend(app, settings.static_root)
     return app
 
 

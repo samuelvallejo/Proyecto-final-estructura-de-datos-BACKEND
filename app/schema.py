@@ -3,7 +3,7 @@ import time
 import uuid
 from sqlalchemy import (
     MetaData, Table, Column, String, Text, Integer, BigInteger, Float, Boolean,
-    JSON, ForeignKey, UniqueConstraint, CheckConstraint, Index,
+    JSON, ForeignKey, UniqueConstraint, CheckConstraint, Index, true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -41,11 +41,13 @@ def table(name, *fields):
 roles = table('roles', col('name', unique=True))
 permissions = table('permissions', col('code', unique=True))
 role_permissions = table('role_permissions', ref('role_id', 'roles'), ref('permission_id', 'permissions'), UniqueConstraint('role_id', 'permission_id'))
-users = table('users', col('email', Text, unique=True), col('display_name', Text), col('password_hash', Text), Column('email_lookup', String(64), unique=True))
+users = table('users', col('email', Text, unique=True), col('display_name', Text), col('password_hash', Text), Column('email_lookup', String(64), unique=True),
+              Column('active', Boolean, nullable=False, default=True, server_default=true()))
 auth_attempts = table('auth_attempts', col('ip_hash', String(64)), col('account_hash', String(64)))
 user_roles = table('user_roles', ref('user_id', 'users'), ref('role_id', 'roles'), UniqueConstraint('user_id', 'role_id'))
 devices = table('devices', ref('user_id', 'users', True), col('platform'))
-sessions = table('sessions', ref('device_id', 'devices'), col('token_hash', String(64), unique=True), col('expires_at', BigInteger))
+sessions = table('sessions', ref('device_id', 'devices'), col('token_hash', String(64), unique=True), col('expires_at', BigInteger),
+                 Column('last_seen_at', BigInteger), Column('ended_at', BigInteger))
 countries = table('countries', col('code', String(3), unique=True), col('name'))
 regions = table('regions', ref('country_id', 'countries'), col('name'), UniqueConstraint('country_id', 'name'))
 cities = table('cities', ref('region_id', 'regions'), col('name'), UniqueConstraint('region_id', 'name'))
@@ -85,8 +87,14 @@ api_usage = table('api_usage', ref('session_id', 'sessions'), col('status'), col
 trips = table('trips', ref('user_id', 'users'), ref('session_id', 'sessions'), col('encrypted_details', Text), Column('ended_at', BigInteger))
 trip_samples = table('trip_samples', ref('trip_id', 'trips'), col('encrypted_position', Text))
 trip_reports = table('trip_reports', ref('trip_id', 'trips'), ref('report_id', 'reports'), UniqueConstraint('trip_id', 'report_id'))
+# Paso de una persona cerca de un bache conocido; permite contar cuántas personas pasan por el mismo hueco.
+pothole_passes = table('pothole_passes', ref('pothole_id', 'potholes'), ref('user_id', 'users'), ref('session_id', 'sessions'),
+                       ref('trip_id', 'trips', True), col('source', String(20)), col('distance_m', Float),
+                       CheckConstraint("source IN ('scan','gps','trip','community')", name='source'))
 Index('ix_auth_attempts_recent', auth_attempts.c.created_at)
 Index('ix_trips_one_active_user', trips.c.user_id, unique=True, postgresql_where=trips.c.ended_at.is_(None))
+Index('ix_pothole_passes_recent', pothole_passes.c.user_id, pothole_passes.c.pothole_id, pothole_passes.c.created_at)
+Index('ix_audit_events_recent', audit_events.c.created_at)
 
 for relation in metadata.tables.values():
     for field in relation.c:

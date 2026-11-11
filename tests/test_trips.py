@@ -34,7 +34,7 @@ def test_multiple_holes_same_frame_stay_distinct_and_attach_once(client):
     trip = client.post('/api/trips', json=payload).json()
     boxes = [{'xmin': 50, 'ymin': 600, 'xmax': 300, 'ymax': 950}, {'xmin': 650, 'ymin': 600, 'xmax': 900, 'ymax': 950}]
     detections = [DamageDetection(boundingBox=box, confidence=.9, hazardScore=65, aiDescription='Posible bache visible', riskFactors=['Bordes rotos']) for box in boxes]
-    async def fake_ai(data, image):
+    async def fake_ai(data, image, live=False):
         return Analysis(isPothole=True, potholeType='BACHE', hazardScore=65, aiDescription='Daños visibles', riskFactors=['Bordes rotos'], boundingBox=detections[0].boundingBox, confidence=.9, detections=detections), 'local-yolo', 'test', False
     client.app.state.ai.analyze = fake_ai
     coords = {'lat': '3.45', 'lng': '-76.53', 'accuracy': '10', 'tripId': trip['id']}
