@@ -24,7 +24,7 @@
     },
     "frontendCommit": {
       "type": "string",
-      "defaultValue": "23e3a5b871d4290920a0bdc8df3292553b3ffdbe",
+      "defaultValue": "31fe384f4d0086936df653b8b5d75671beff70b8",
       "minLength": 40,
       "maxLength": 40
     },

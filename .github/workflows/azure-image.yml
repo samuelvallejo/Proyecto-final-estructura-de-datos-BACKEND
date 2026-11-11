@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 30
     env:
       ACR_NAME: bachescanai4udjwwdxkco7m
-      FRONTEND_COMMIT: 23e3a5b871d4290920a0bdc8df3292553b3ffdbe
+      FRONTEND_COMMIT: 31fe384f4d0086936df653b8b5d75671beff70b8
     steps:
       - name: Checkout the reviewed source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
