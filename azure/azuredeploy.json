@@ -28,6 +28,13 @@
       "minLength": 40,
       "maxLength": 40
     },
+    "frontendOrigin": {
+      "type": "string",
+      "defaultValue": "https://bachescan-ai.vercel.app",
+      "metadata": {
+        "description": "Origen público del frontend en Vercel que reenvía /api a esta aplicación; se agrega a CORS_ORIGINS."
+      }
+    },
     "imageTag": {
       "type": "string",
       "defaultValue": "azure-20261029-1"
@@ -352,7 +359,7 @@
                 },
                 {
                   "name": "CORS_ORIGINS",
-                  "value": "[concat('https://', variables('appName'), '.', reference(variables('environmentId'), '2025-01-01').defaultDomain)]"
+                  "value": "[concat('https://', variables('appName'), '.', reference(variables('environmentId'), '2025-01-01').defaultDomain, ',', parameters('frontendOrigin'))]"
                 },
                 {
                   "name": "SECURE_COOKIES",
