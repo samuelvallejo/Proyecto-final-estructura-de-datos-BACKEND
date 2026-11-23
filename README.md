@@ -138,6 +138,10 @@ La tabla `pothole_passes` registra cada vez que una persona pasa a menos de `PAS
 
 Los recorridos (y las sesiones de conducción con `vehicle: moto|carro`) devuelven `durationMs`, `distanceMeters`, `potholeCount` (baches del trayecto) y `passCount`.
 
+## Modelo bachescan-v2
+
+`models/best.pt` es **bachescan-v2**: el modelo original ajustado en GPU con tres datasets públicos de baches (CC BY 4.0) para detectar desde un vehículo, incluidos huecos con agua. En un video de prueba grabado desde un vehículo pasa de 0,1 a 1,7 baches por fotograma. El teléfono ejecuta una exportación ONNX del mismo modelo y el servidor confirma cada hallazgo: primero con bordes grises y, si no encuentra nada, con la imagen estirada (`YOLO_LIVE_STRETCH`). Datos, atribución, métricas y cómo repetir el entrenamiento: [training/README.md](training/README.md).
+
 ## Escaneo más rápido
 
 - El escaneo en vivo (`mode=live`) infiere a `YOLO_LIVE_IMAGE_SIZE=448` px; las fotografías mantienen `YOLO_IMAGE_SIZE`. En CPU, con el fotograma de prueba: 640 px ≈ 132 ms, 512 px ≈ 91 ms, 448 px ≈ 75 ms, con las mismas detecciones.

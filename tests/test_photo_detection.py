@@ -24,7 +24,7 @@ def image_bytes(format='JPEG', size=(320, 200), exif=None):
 
 def test_provided_model_checksum_class_mapping_and_actual_inference(custom_detector):
     assert hashlib.sha256((FIXTURE.parents[2] / 'models' / 'best.pt').read_bytes()).hexdigest() == Settings(_env_file=None).yolo_model_sha256
-    assert custom_detector.names == {0: '0'}  # Actual metadata; never pretend the checkpoint says pothole.
+    assert custom_detector.names == {0: 'pothole'}  # Metadatos reales de bachescan-v2.
     assert custom_detector.class_id == 0 and custom_detector.device == 'cpu'
     with Image.open(FIXTURE) as image:
         result = custom_detector.detect(image)
@@ -107,6 +107,19 @@ def test_single_load_reused_predictor_and_clipped_pixels():
         results = list(executor.map(lambda _: detector.detect(Image.new('RGB', (320, 200))), range(2)))
     assert state['loads'] == state['peak'] == 1
     assert results[0]['detecciones'][0]['bbox'] == [0., 0., 320., 200.]
+
+def test_live_stretch_resizes_input_and_maps_boxes_back():
+    seen = {}
+    def predict(**kwargs):
+        seen['size'] = kwargs['source'].size
+        seen['imgsz'] = kwargs['imgsz']
+        return [SimpleNamespace(boxes=SimpleNamespace(xyxy=torch.tensor([[104., 104., 208., 312.]]), conf=torch.tensor([.8]), cls=torch.tensor([0.])))]
+    detector = PotholeDetector(Settings(_env_file=None), model_factory=lambda path, task: SimpleNamespace(names={0: 'pothole'}, task=task, predict=predict))
+    result = detector.detect(Image.new('RGB', (832, 416)), 416, stretch=True)
+    assert seen == {'size': (416, 416), 'imgsz': 416}
+    assert result['ancho'] == 832 and result['alto'] == 416
+    assert result['detecciones'][0]['bbox'] == [208., 104., 416., 312.]
+
 
 def test_photo_inference_does_not_block_api_event_loop(client, monkeypatch):
     token(client)

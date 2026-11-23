@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     gemini_model: str = 'gemini-3.5-flash-lite'
     ai_provider: str = 'local'
     pothole_model_path: str = 'models/best.pt'
-    yolo_model_sha256: str = 'af2ac6ce7bfec72e71643659ac946caf80ced84869e526a60135c457abfbb200'
+    # bachescan-v2: best.pt ajustado con 3 datasets públicos de baches (ver training/README.md).
+    yolo_model_sha256: str = 'c76c519c9ddd4ca467172807a37a30e100f9c0e759da904a9b1632f4c96fd738'
     yolo_pothole_class_id: int = Field(default=0, ge=0)
     yolo_confidence: float = Field(default=.25, gt=0, le=1, allow_inf_nan=False)
     yolo_device: Literal['auto', 'cpu', 'cuda'] = 'auto'
@@ -29,7 +30,9 @@ class Settings(BaseSettings):
     local_max_global_scans_per_hour: int = 40000
     local_scan_interval_seconds: float = .4
     # Inferencia del escaneo en vivo: menor resolución y menos latencia que las fotografías.
-    yolo_live_image_size: int = Field(default=448, ge=320, le=1280, multiple_of=32)
+    yolo_live_image_size: int = Field(default=416, ge=320, le=1280, multiple_of=32)
+    # El escaneo en vivo estira el fotograma al cuadrado de entrada, igual que las imágenes de entrenamiento.
+    yolo_live_stretch: bool = True
     pass_radius_meters: float = Field(default=25, ge=5, le=100)
     # Cuentas de demostración (Administrador, Operario y Conductor) sembradas al iniciar.
     # Desactívalas con DEMO_ACCOUNTS=false si la aplicación tiene usuarios reales.

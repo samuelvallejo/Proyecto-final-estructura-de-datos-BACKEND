@@ -54,6 +54,7 @@ class PotholeDetector:
         self.confidence = settings.yolo_confidence
         self.image_size = settings.yolo_image_size
         self.live_image_size = getattr(settings, 'yolo_live_image_size', settings.yolo_image_size)
+        self.live_stretch = getattr(settings, 'yolo_live_stretch', False)
         self.lock = threading.Lock()
         try:
             path = Path(settings.pothole_model_path)
@@ -90,8 +91,8 @@ class PotholeDetector:
                 with Image.new('RGB', (640, 640), '#888888') as blank:
                     # Inicializa el predictor y precalienta ambas resoluciones antes de atender peticiones.
                     self.detect(blank)
-                    if self.live_image_size != self.image_size:
-                        self.detect(blank, self.live_image_size)
+                    if self.live_image_size != self.image_size or self.live_stretch:
+                        self.detect(blank, self.live_image_size, self.live_stretch)
         except Exception:
             self.model = None
             logger.error('custom_pothole_model_unavailable')
@@ -100,13 +101,19 @@ class PotholeDetector:
     def ready(self):
         return self.model is not None
 
-    def detect(self, image: Image.Image, image_size: int | None = None):
+    def detect(self, image: Image.Image, image_size: int | None = None, stretch: bool = False):
         if not self.ready:
             raise ModelUnavailable(MODEL_UNAVAILABLE)
+        size = image_size or self.image_size
+        source, scale_x, scale_y = image, 1., 1.
+        if stretch:
+            # Estirar al cuadrado de entrada (sin bordes grises), como las imágenes «Stretch to 640» del entrenamiento.
+            source = image.resize((size, size), Image.Resampling.BILINEAR)
+            scale_x, scale_y = image.width / size, image.height / size
         # Ultralytics mutates its predictor; serialize all photo/live calls on this shared instance.
         with self.lock:
-            predictions = self.model.predict(source=image, conf=self.confidence, device=self.device,
-                classes=[self.class_id], imgsz=image_size or self.image_size, max_det=100, iou=.45,
+            predictions = self.model.predict(source=source, conf=self.confidence, device=self.device,
+                classes=[self.class_id], imgsz=size, max_det=100, iou=.45,
                 half=self.device.startswith('cuda'),
                 save=False, save_txt=False, show=False, verbose=False)
             result = predictions[0]
@@ -118,16 +125,20 @@ class PotholeDetector:
                 for bbox, confidence, class_id in zip(coordinates, confidences, classes):
                     if int(class_id) != self.class_id or confidence < self.confidence or not all(math.isfinite(v) for v in [*bbox, confidence]):
                         continue
-                    xmin, ymin = max(0., min(float(bbox[0]), image.width)), max(0., min(float(bbox[1]), image.height))
-                    xmax, ymax = max(0., min(float(bbox[2]), image.width)), max(0., min(float(bbox[3]), image.height))
+                    xmin, ymin = max(0., min(float(bbox[0]) * scale_x, image.width)), max(0., min(float(bbox[1]) * scale_y, image.height))
+                    xmax, ymax = max(0., min(float(bbox[2]) * scale_x, image.width)), max(0., min(float(bbox[3]) * scale_y, image.height))
                     if xmax <= xmin or ymax <= ymin:
                         continue
                     detections.append({'clase': 'pothole', 'confianza': round(float(confidence), 6),
                                        'bbox': [round(v, 3) for v in (xmin, ymin, xmax, ymax)]})
             return {'total_baches': len(detections), 'ancho': image.width, 'alto': image.height, 'detecciones': detections}
 
-    def analyze(self, image: Image.Image, image_size: int | None = None) -> Analysis:
+    def analyze(self, image: Image.Image, image_size: int | None = None, stretch: bool = False) -> Analysis:
+        # Primero con bordes grises; si no aparece nada y se pidió, se repite estirando la imagen
+        # (como el teléfono). Así el servidor confirma lo que el teléfono detectó con cualquiera de los dos.
         result = self.detect(image, image_size)
+        if stretch and not result['detecciones']:
+            result = self.detect(image, image_size, stretch=True)
         hits = []
         for item in result['detecciones'][:20]:
             xmin, ymin, xmax, ymax = item['bbox']

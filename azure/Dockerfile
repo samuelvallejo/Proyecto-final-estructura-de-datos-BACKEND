@@ -1,6 +1,6 @@
 # El frontend conserva exactamente el commit elegido de su repositorio independiente.
 FROM node:24-bookworm-slim AS frontend
-ARG FRONTEND_COMMIT=31fe384f4d0086936df653b8b5d75671beff70b8
+ARG FRONTEND_COMMIT=ceb071fbeede6f7057fcc63132c9eb7479076888
 ADD https://github.com/samuelvallejo/proyecto-final-estructura-de-datos-FRONTEND/archive/${FRONTEND_COMMIT}.tar.gz /tmp/frontend.tar.gz
 RUN mkdir /frontend && tar -xzf /tmp/frontend.tar.gz -C /frontend --strip-components=1
 WORKDIR /frontend

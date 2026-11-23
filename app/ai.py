@@ -116,7 +116,8 @@ class AIService:
     async def analyze(self, data: bytes, image: Image.Image, live: bool = False):
         started = time.perf_counter()
         size = self.settings.yolo_live_image_size if live else None
-        result = await asyncio.to_thread(self.local.analyze, image, size)
+        stretch = live and getattr(self.settings, 'yolo_live_stretch', False)
+        result = await asyncio.to_thread(self.local.analyze, image, size, stretch)
         latency = round((time.perf_counter() - started) * 1000)
         with self.metrics_lock:
             self.model_latencies.append(latency)

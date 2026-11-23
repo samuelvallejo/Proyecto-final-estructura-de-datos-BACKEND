@@ -11,3 +11,7 @@ __pycache__/
 *.db
 azure/*.private.json
 .git/
+
+# Clave privada de Roboflow para entrenar
+training/roboflow.env
+training/data/
