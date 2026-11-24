@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from . import schema as s
 from .admin import AdminController, AdminService
 from .operator_api import OperatorController
+from .duplicates_api import DuplicatesController
 from .ai import AIService, FrameValidator
 from .auth import AuditLog, AuthController, DemoAccounts, PasswordHasher, SessionGuard, Vault
 from .community import CommunityController
@@ -287,6 +288,7 @@ class ReportController:
                 'generalTree': {'use': 'Exploración jerárquica: ciudad, barrio, vía y bache'},
                 'graph': {'use': 'Red de cercanía entre baches: listas de adyacencia, BFS, DFS y Dijkstra'},
                 'indexedBinaryHeap': {'use': 'Cola de mantenimiento del Operario: montículo indexado y plan de ruta 2-opt'},
+                'disjointSet': {'use': 'Detección de baches duplicados: rejilla espacial hash y unión-búsqueda'},
                 'persistence': 'PostgreSQL; las estructuras de ejecución son temporales por proceso'}
 
 
@@ -404,7 +406,7 @@ class BacheScanApplication:
                       docs_url=None, redoc_url=None, openapi_url=None)
         for controller in (AuthController(), TripController(), CommunityController(), TreeController(),
                            GraphController(), MigrationController(), ProfileController(), AdminController(),
-                           OperatorController()):
+                           OperatorController(), DuplicatesController()):
             app.include_router(controller.router)
         app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()],
                            allow_credentials=True, allow_methods=['GET', 'POST'],
