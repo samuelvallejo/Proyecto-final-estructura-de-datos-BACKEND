@@ -22,6 +22,9 @@ def test_search_requires_session_and_validates_input(client):
     accounts = demo(client)
     login(client, accounts['Conductor']['email'], accounts['Conductor']['password'])
     assert client.get('/api/reports/search?q=').status_code == 422
+    assert client.get('/api/reports/search').status_code == 422  # Text or at least one filter is required.
+    assert client.get('/api/reports/search?from=10&to=5').status_code == 422
+    assert client.get('/api/reports/search?risk=EXTREME').status_code == 422
     assert client.get('/api/reports/search?q=' + 'x' * 121).status_code == 422
     empty = client.get('/api/reports/search?q=de la').json()
     assert empty['reports'] == [] and empty['tokens'] == []
@@ -42,6 +45,13 @@ def test_search_ranks_pages_and_refreshes_after_changes(client):
     assert again['index']['rebuilt'] is False  # Same database fingerprint: cached index reused.
     assert [item['id'] for item in client.get('/api/reports/search?q=separador').json()['reports']] == [other['id']]
 
+    filtered = client.get('/api/reports/search?q=avenida&risk=MEDIUM').json()
+    assert [item['id'] for item in filtered['reports']] == [medium['id']]
+    assert filtered['facets']['risk'] == {'CRITICAL': 1, 'MEDIUM': 1}
+    only_risk = client.get('/api/reports/search?risk=CRITICAL&risk=HIGH').json()
+    assert {item['id'] for item in only_risk['reports']} == {critical['id'], other['id']} and only_risk['tokens'] == []
+    future = client.get(f'/api/reports/search?q=avenida&from={s.Clock.now() + 60_000}').json()
+    assert future['reports'] == []
     suggestions = client.get('/api/reports/suggest?prefix=panam').json()['suggestions']
     assert suggestions == [{'label': 'Avenida Panamericana', 'kind': 'street', 'count': 2}]
 

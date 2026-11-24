@@ -9,8 +9,8 @@ results never depend on which replica answers.
 """
 import threading
 import time
-from typing import Protocol
-from fastapi import APIRouter, Depends, Query, Request
+from typing import Literal, Protocol
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from .auth import SessionGuard
 from .repository import PotholeStatus
@@ -25,6 +25,8 @@ class ReportSearch(Protocol):
     """Subject interface shared by the real index and its proxy."""
 
     def search(self, query: str) -> tuple[list[dict], list[str]]: ...
+    def filter(self, query: str | None = None, risk: list[str] | None = None, damage: list[str] | None = None,
+               since: int | None = None, until: int | None = None) -> dict: ...
     def suggest(self, prefix: str, limit: int) -> list[dict]: ...
     def stats(self) -> dict: ...
 
@@ -68,6 +70,10 @@ class CachedReportSearch:
     def search(self, query: str) -> tuple[list[dict], list[str]]:
         return self._subject().search(query)
 
+    def filter(self, query: str | None = None, risk: list[str] | None = None, damage: list[str] | None = None,
+               since: int | None = None, until: int | None = None) -> dict:
+        return self._subject().filter(query, risk, damage, since, until)
+
     def suggest(self, prefix: str, limit: int) -> list[dict]:
         return self._subject().suggest(prefix, limit)
 
@@ -92,13 +98,21 @@ class SearchController:
         self.router.add_api_route('/suggest', self.suggest_places, methods=['GET'])
 
     @measured()
-    def search_reports(self, request: Request, q: str = Query(min_length=1, max_length=120),
+    def search_reports(self, request: Request, q: str | None = Query(None, min_length=1, max_length=120),
+                       risk: list[Literal['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']] = Query(default=[]),
+                       damage: list[Literal['BACHE', 'HUNDIMIENTO', 'GRIETA', 'OTRO_DANO']] = Query(default=[]),
+                       since: int | None = Query(None, alias='from', ge=0), until: int | None = Query(None, alias='to', ge=0),
                        limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+        if q is None and not risk and not damage and since is None and until is None:
+            raise HTTPException(422, 'Escribe un texto o elige al menos un filtro.')
+        if since is not None and until is not None and since > until:
+            raise HTTPException(422, 'La fecha inicial no puede ser posterior a la final.')
         search = report_search(request)
-        matches, tokens = search.search(q)
+        result = search.filter(q, risk, damage, since, until)
+        matches = result['reports']
         page = matches[offset:offset + limit]
-        return {'reports': page, 'total': len(matches), 'hasMore': offset + len(page) < len(matches), 'tokens': tokens,
-                'index': search.stats()}
+        return {'reports': page, 'total': len(matches), 'hasMore': offset + len(page) < len(matches), 'tokens': result['tokens'],
+                'facets': result['facets'], 'index': search.stats()}
 
     def suggest_places(self, request: Request, prefix: str = Query(min_length=1, max_length=60),
                        limit: int = Query(8, ge=1, le=20)):

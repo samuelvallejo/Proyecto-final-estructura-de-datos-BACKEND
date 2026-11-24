@@ -70,5 +70,6 @@ class BitmapIndex:
         return bits.bit_count()
 
     def counts(self, field: str, within: int) -> dict[str, int]:
-        """Facet counts: how many documents of ``within`` have each value of ``field``."""
-        return {value: (bits & within).bit_count() for value, bits in sorted(self.bitmaps.get(field, {}).items())}
+        """Facet counts: how many documents of ``within`` have each value of ``field`` (zeros omitted)."""
+        counts = {value: (bits & within).bit_count() for value, bits in sorted(self.bitmaps.get(field, {}).items())}
+        return {value: count for value, count in counts.items() if count}
