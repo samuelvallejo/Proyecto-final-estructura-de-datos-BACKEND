@@ -34,6 +34,10 @@ La detección utiliza exclusivamente los pesos personalizados `models/best.pt` c
 | GET | `/api/data-structures/stats` | Métricas de estructuras de ejecución | usuario |
 | GET | `/api/data-structures/trees/reports` | Explorador de árboles de reportes | usuario |
 | GET | `/api/data-structures/graphs/reports` | Explorador de grafos de cercanía | usuario |
+| GET | `/api/operator/queue` | Cola de mantenimiento priorizada con montículo indexado | operario, administrador |
+| GET | `/api/operator/plan` | Plan de jornada: baches urgentes ordenados con vecino más cercano + 2-opt | operario, administrador |
+| POST | `/api/operator/reports/{id}/transition` | Cambio de estado según el flujo permitido | operario, administrador |
+| GET | `/api/operator/reports/{id}/timeline` | Historial de estados del bache | operario, administrador |
 | GET | `/api/admin/overview` | Resumen global para administración | administrador |
 | GET | `/api/admin/users` | Usuarios con rol, estado y actividad | administrador |
 | POST | `/api/admin/users/{id}/role` | Cambiar rol (Administrador, Operario, Conductor) | administrador |
@@ -119,6 +123,10 @@ Consulta [la guía de árboles](docs/ARBOLES.md) para el uso, la correspondencia
 Los reportes activos también forman un grafo no dirigido y ponderado por distancia geográfica. Implementa listas de adyacencia, BFS con cola enlazada, DFS con pila, componentes y Dijkstra. La API protegida `/api/data-structures/graphs/reports` consulta hasta 80 reportes de mayor riesgo y conecta los que están dentro de 50 a 2000 metros. La pantalla permite inspeccionar vecinos, recorrer pasos y mostrar el grafo en el mapa. Las conexiones representan cercanía, no calles o rutas para conducir.
 
 Consulta [GRAFOS.md](docs/GRAFOS.md) para las fuentes académicas consultadas en internet, archivos, contrato, límites y pruebas. No necesita una migración ni dependencias nuevas.
+
+## Espacio del Operario
+
+El rol Operario tiene una cola de mantenimiento priorizada (montículo binario indexado), un plan de jornada que ordena los baches más urgentes para recorrerlos con menos distancia (vecino más cercano + 2-opt) y un flujo de estados validado como grafo dirigido. Consulta [OPERATOR.md](docs/OPERATOR.md).
 
 ## Modo administrador y cuentas demo
 
