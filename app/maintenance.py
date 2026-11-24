@@ -6,7 +6,7 @@ API module ``operator_api`` loads reports from PostgreSQL and uses these classes
 import math
 from dataclasses import dataclass
 from .priority_queue import IndexedMaxHeap
-from .geo import GeoMath
+from .route_planning import RoutePlanner  # noqa: F401  (re-exported for callers of this module)
 from .structures import Queue
 
 DAY_MS = 86_400_000
@@ -131,91 +131,3 @@ class MaintenanceQueue:
 
     def top(self, limit: int) -> list[tuple[dict, PriorityBreakdown]]:
         return [(self.reports[identity], self.breakdowns[identity]) for identity, _ in self.heap.top(limit)]
-
-
-class RoutePlanner:
-    """Orders a day's stops to reduce the walking or driving distance.
-
-    The exact problem is the travelling salesman path (NP-hard). We use the
-    nearest neighbour heuristic, O(k^2), and then improve it with 2-opt, which
-    reverses a segment whenever that shortens the path, O(k^2) per pass.
-    Distances are straight-line (haversine), not road distances.
-    """
-
-    MAX_PASSES = 50
-
-    def __init__(self, start: dict | None, stops: list[dict]):
-        self.start = start
-        self.stops = stops
-        points = ([start] if start else []) + [stop['location'] for stop in stops]
-        self.offset = 1 if start else 0
-        # Distance matrix: a two-dimensional array, symmetric with zero diagonal.
-        self.matrix = [[0.0] * len(points) for _ in points]
-        for i in range(len(points)):
-            for j in range(i + 1, len(points)):
-                self.matrix[i][j] = self.matrix[j][i] = GeoMath.distance(points[i], points[j])
-        self.improvements = 0
-
-    def length(self, path: list[int]) -> float:
-        return sum(self.matrix[a][b] for a, b in zip(path, path[1:]))
-
-    def priority_path(self) -> list[int]:
-        """Baseline: visit the stops in the received (priority) order."""
-        return list(range(len(self.matrix)))
-
-    def nearest_neighbour(self) -> list[int]:
-        size = len(self.matrix)
-        if size == 0:
-            return []
-        path = [0]
-        unvisited = set(range(1, size))
-        while unvisited:
-            last = path[-1]
-            following = min(unvisited, key=lambda node: (self.matrix[last][node], node))
-            path.append(following)
-            unvisited.remove(following)
-        return path
-
-    def two_opt(self, path: list[int]) -> list[int]:
-        """Open path 2-opt; the first node is fixed when the route has a start point."""
-        path = list(path)
-        first = 1 if self.start else 0
-        improved, passes = True, 0
-        while improved and passes < self.MAX_PASSES:
-            improved, passes = False, passes + 1
-            for i in range(max(first, 1), len(path) - 1):
-                for j in range(i + 1, len(path)):
-                    before = self.matrix[path[i - 1]][path[i]]
-                    after = self.matrix[path[i - 1]][path[j]]
-                    if j + 1 < len(path):
-                        before += self.matrix[path[j]][path[j + 1]]
-                        after += self.matrix[path[i]][path[j + 1]]
-                    if after + 1e-9 < before:
-                        path[i:j + 1] = reversed(path[i:j + 1])
-                        improved = True
-                        self.improvements += 1
-            if not self.start and len(path) > 2:
-                # Without a fixed start, also try reversing a prefix (moves the first stop).
-                for j in range(1, len(path) - 1):
-                    before = self.matrix[path[j]][path[j + 1]]
-                    after = self.matrix[path[0]][path[j + 1]]
-                    if after + 1e-9 < before:
-                        path[:j + 1] = reversed(path[:j + 1])
-                        improved = True
-                        self.improvements += 1
-        return path
-
-    def plan(self) -> dict:
-        baseline = self.priority_path()
-        path = self.two_opt(self.nearest_neighbour())
-        if self.length(path) > self.length(baseline):
-            path = baseline  # Never return something worse than the priority order.
-        order = [node - self.offset for node in path if node >= self.offset]
-        # Distance travelled to reach each stop; the first stop has none without a start point.
-        legs = [round(self.matrix[path[position - 1]][node], 1) if position else None
-                for position, node in enumerate(path) if node >= self.offset]
-        planned, original = self.length(path), self.length(baseline)
-        return {'order': order, 'legsMeters': legs, 'totalMeters': round(planned, 1),
-                'priorityOrderMeters': round(original, 1),
-                'savedPercent': round(100 * (original - planned) / original, 1) if original else 0.0,
-                'improvements': self.improvements}

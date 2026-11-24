@@ -70,6 +70,10 @@ def test_day_plan_visits_every_selected_stop(client):
     assert plan['totalMeters'] <= plan['priorityOrderMeters']
     lats = [stop['report']['location']['lat'] for stop in plan['stops']]
     assert lats == sorted(lats)  # A straight street is walked in order from the start point.
+    assert plan['algorithm'] == 'two-opt' and plan['algorithms'] == ['two-opt', 'nearest-neighbour', 'priority']
+    baseline = client.get('/api/operator/plan?limit=5&lat=1.1995&lng=-77.29&algorithm=priority').json()
+    assert baseline['savedPercent'] == 0 and baseline['totalMeters'] >= plan['totalMeters']
+    assert client.get('/api/operator/plan?algorithm=genetic').status_code == 422
     assert client.get('/api/operator/plan?lat=1.2').status_code == 422
     assert client.get('/api/operator/plan').json()['stops'][0]['legMeters'] is None
 

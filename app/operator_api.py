@@ -11,8 +11,9 @@ from sqlalchemy import select, update
 from .auth import AuditLog, Roles, SessionGuard
 from .contracts import Position
 from .demo_policy import forbid_demo_writes
-from .maintenance import MaintenanceQueue, RoutePlanner, StatusWorkflow
+from .maintenance import MaintenanceQueue, StatusWorkflow
 from .profile import AccountFormat
+from .route_planning import RoutePlannerFactory
 from . import schema as s
 
 FIELD_ROLES = (Roles.OPERATOR, Roles.ADMIN)
@@ -50,11 +51,11 @@ class MaintenanceService:
                 'structure': {'name': 'indexed-binary-max-heap', 'size': len(work.heap),
                               'height': work.heap.height, 'heapifyComparisons': work.heap.comparisons}}
 
-    def plan(self, limit: int, start: dict | None) -> dict:
+    def plan(self, limit: int, start: dict | None, algorithm: str = RoutePlannerFactory.DEFAULT) -> dict:
         now = s.Clock.now()
         selected = MaintenanceQueue(self.open_reports(), now).top(limit)
         stops = [report for report, _ in selected]
-        route = RoutePlanner(start, stops).plan()
+        route = RoutePlannerFactory.create(algorithm, start, stops).plan()
         scores = {report['id']: breakdown.score for report, breakdown in selected}
         ordered = [{'step': step, 'report': stops[index], 'priorityScore': scores[stops[index]['id']],
                     'legMeters': leg}
@@ -62,7 +63,7 @@ class MaintenanceService:
         return {'start': start, 'stops': ordered, 'totalMeters': route['totalMeters'],
                 'priorityOrderMeters': route['priorityOrderMeters'], 'savedPercent': route['savedPercent'],
                 'improvements': route['improvements'], 'generatedAt': now,
-                'algorithm': 'heap top-k + nearest neighbour + 2-opt (straight-line distance)'}
+                'algorithm': route['algorithm'], 'algorithms': RoutePlannerFactory.names()}
 
     def transition(self, report_id: str, payload: TransitionRequest, session: dict) -> dict:
         with self.app.state.engine.begin() as conn:
@@ -114,11 +115,12 @@ class OperatorController:
         return MaintenanceService(request).queue(limit)
 
     def day_plan(self, request: Request, limit: int = Query(8, ge=1, le=25),
-                 lat: float | None = Query(None, ge=-90, le=90), lng: float | None = Query(None, ge=-180, le=180)):
+                 lat: float | None = Query(None, ge=-90, le=90), lng: float | None = Query(None, ge=-180, le=180),
+                 algorithm: Literal['two-opt', 'nearest-neighbour', 'priority'] = 'two-opt'):
         if (lat is None) != (lng is None):
             raise HTTPException(422, 'Envía latitud y longitud juntas o ninguna.')
         start = Position(lat=lat, lng=lng, accuracy=0).model_dump(include={'lat', 'lng'}) if lat is not None else None
-        return MaintenanceService(request).plan(limit, start)
+        return MaintenanceService(request).plan(limit, start, algorithm)
 
     def change_status(self, report_id: UUID, payload: TransitionRequest, request: Request,
                       session=Depends(field_staff), _writer=Depends(forbid_demo_writes)):
