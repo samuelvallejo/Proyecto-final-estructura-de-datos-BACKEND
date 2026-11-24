@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select, text, update
 from .auth import AuditLog
+from .demo_policy import forbid_demo_writes
 from .duplicates import DuplicateDetector
 from .maintenance import StatusWorkflow
 from .operator_api import field_staff
@@ -91,5 +92,6 @@ class DuplicatesController:
                           radius: float = Query(15, ge=DuplicateDetector.MIN_RADIUS, le=DuplicateDetector.MAX_RADIUS)):
         return DuplicateService(request).review(radius)
 
-    def merge_duplicates(self, payload: MergeRequest, request: Request, session=Depends(field_staff)):
+    def merge_duplicates(self, payload: MergeRequest, request: Request, session=Depends(field_staff),
+                         _writer=Depends(forbid_demo_writes)):
         return DuplicateService(request).merge(payload, session)
