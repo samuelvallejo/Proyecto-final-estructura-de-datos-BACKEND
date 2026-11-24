@@ -11,6 +11,7 @@ from .contracts import Position
 from .auth import SessionGuard
 from .repository import PassTracker, PotholeStatus
 from .structures import HashMap, HashSet, SinglyLinkedList, Sorter
+from .scan_metrics import ScanMetrics, instance_id
 
 DAY_MS = 86_400_000
 LOCAL_TZ = timezone(timedelta(hours=-5))  # Colombia time, no daylight saving.
@@ -253,8 +254,9 @@ class DashboardService:
                 data = {'potholes': [by_pothole[row['pothole_id']] for row in top if row['pothole_id'] in by_pothole]}
             else:
                 stats = self.pipeline.stats()
-                data = {'queue': stats['queue'], 'latency': stats.get('totalLatencyMs'),
-                        'modelLatency': self.ai.latency_summary() if hasattr(self.ai, 'latency_summary') else None,
+                data = {'queue': stats['queue'], 'latency': ScanMetrics(self.engine).latency(),
+                        'modelLatency': {**self.ai.latency_summary(), 'scope': 'this-replica'} if hasattr(self.ai, 'latency_summary') else None,
+                        'instance': instance_id(),
                         'liveImageSize': self.settings.yolo_live_image_size,
                         'photoImageSize': self.settings.yolo_image_size,
                         'nextScanMs': round(self.settings.local_scan_interval_seconds * 1000)}

@@ -17,6 +17,7 @@ from .admin import AdminController, AdminService
 from .operator_api import OperatorController
 from .duplicates_api import DuplicatesController
 from .search_api import SearchController
+from .scan_metrics import ScanMetrics, instance_id
 from .ai import AIService, FrameValidator
 from .auth import AuditLog, AuthController, DemoAccounts, PasswordHasher, SessionGuard, Vault
 from .community import CommunityController
@@ -272,14 +273,15 @@ class ReportController:
         return {'report': patrol.step(current, direction), 'size': patrol.ring.size}
 
     def history(self, request: Request, reverse: bool = True, owner: str = Depends(SessionGuard.session_id)):
-        pipeline = request.app.state.pipeline
-        events = pipeline.history.reverse() if reverse else iter(pipeline.history)
-        return {'events': [{key: value for key, value in event.items() if key != 'sessionId'}
-                           for event in events if event['sessionId'] == owner]}
+        # Read from PostgreSQL: the in-memory history only knows the scans of this replica.
+        return {'events': ScanMetrics(request.app.state.engine).history(owner, newest_first=reverse), 'instance': instance_id()}
 
     def stats(self, request: Request):
         return {**request.app.state.pipeline.stats(),
-                'modelLatencyMs': request.app.state.ai.latency_summary(),
+                # Persisted latency is shared by every replica; the lists above belong to this process only.
+                'totalLatencyMs': ScanMetrics(request.app.state.engine).latency(),
+                'modelLatencyMs': {**request.app.state.ai.latency_summary(), 'scope': 'this-replica'},
+                'instance': {'id': instance_id(), 'scope': 'Las listas, colas y la ventana de latencias del modelo son de esta réplica'},
                 'array': {'use': 'Tensor NumPy NCHW de imagen y arreglo dinámico del montículo'},
                 'circularDoublyLinkedList': {'use': 'Recorrido circular de baches prioritarios: anterior y siguiente'},
                 'stack': {'use': 'Historial LIFO de navegación y recorridos en profundidad (DFS)'},
