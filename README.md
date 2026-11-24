@@ -29,6 +29,8 @@ La detección utiliza exclusivamente los pesos personalizados `models/best.pt` c
 | GET | `/api/scans/history` | Historial de análisis por sesión | usuario |
 | GET | `/api/reports` | Listado paginado de reportes | usuario |
 | GET | `/api/reports/priority` | Listado por riesgo descendente | usuario |
+| GET | `/api/reports/search` | Búsqueda en el servidor: índice invertido + trie, todas las palabras | usuario |
+| GET | `/api/reports/suggest` | Sugerencias de calles, barrios y ciudades por prefijo | usuario |
 | GET | `/api/reports/nearby` | Reportes dentro de un radio de kilómetros | usuario |
 | GET | `/api/reports/patrol` | Recorrido circular de reportes prioritarios | usuario |
 | GET | `/api/data-structures/stats` | Métricas de estructuras de ejecución | usuario |
@@ -119,6 +121,10 @@ Consulta [COMUNIDAD.md](COMUNIDAD.md) para el contrato, privacidad, límites y p
 BacheScan adapta los ejemplos de árbol binario del material docente Arboles.pdf. El BST permite ordenar, consultar intervalos y recorrer reportes por riesgo; la jerarquía de ubicaciones agrupa ciudad, barrio, vía y bache. La pantalla **Reportes → Abrir explorador de árboles** y la sección **Estructuras** muestran nodos, recorridos y métricas con datos guardados.
 
 Consulta [la guía de árboles](docs/ARBOLES.md) para el uso, la correspondencia con el PDF, los archivos, las restricciones y las pruebas. Las respuestas requieren sesión y representan una muestra explícita de hasta 200 reportes activos. PostgreSQL conserva la persistencia y no se requiere una migración adicional.
+
+## Búsqueda de reportes
+
+`GET /api/reports/search` busca en todos los reportes activos, no solo en los cargados en el navegador, con un índice invertido y un árbol de prefijos que completa la última palabra. Consulta [SEARCH.md](docs/SEARCH.md).
 
 ## Grafos de cercanía
 
