@@ -42,7 +42,7 @@ class SpatialHashGrid(Generic[T]):
         return row, math.floor(lng / self._lng_step(row))
 
     @staticmethod
-    def _valid(lat: float, lng: float) -> bool:
+    def valid(lat: float, lng: float) -> bool:
         return all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
                    for value in (lat, lng)) and abs(lat) <= MAX_LATITUDE and -180 <= lng <= 180
 
@@ -50,7 +50,7 @@ class SpatialHashGrid(Generic[T]):
         """Add a point; False when the coordinates cannot be indexed (near a pole or invalid)."""
         if key in self.points:
             raise KeyError('Duplicated point key')
-        if not self._valid(lat, lng):
+        if not self.valid(lat, lng):
             return False
         self.points[key] = {'lat': float(lat), 'lng': float(lng)}
         self.cells.setdefault(self._cell(lat, lng), []).append(key)

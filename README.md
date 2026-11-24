@@ -138,6 +138,10 @@ El rol Operario tiene una cola de mantenimiento priorizada (montículo binario i
 
 También puede revisar y fusionar baches duplicados: una rejilla espacial con tabla hash encuentra los pares cercanos y un union-find los agrupa. Consulta [DUPLICATES.md](docs/DUPLICATES.md).
 
+## Patrones de diseño
+
+El espacio de mantenimiento, los duplicados y la búsqueda aplican Strategy, Factory, Repository, Chain of Responsibility, Template Method, Command, Facade, Proxy y Decorator. Consulta [DESIGN_PATTERNS.md](docs/DESIGN_PATTERNS.md).
+
 ## Modo administrador y cuentas demo
 
 Con `DEMO_ACCOUNTS=true` (valor por defecto) la API crea o actualiza al iniciar tres cuentas con su rol: **Administrador**, **Operario** y **Conductor**. Sus correos y contraseñas se configuran con las variables `DEMO_*` de `.env.example`. `GET /api/auth/demo` las publica para que la pantalla de acceso muestre tres botones y las credenciales para copiar.

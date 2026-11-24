@@ -56,6 +56,7 @@ def test_queue_orders_by_priority_and_explains_the_score(client):
     assert first['priority']['score'] == round(sum(first['priority']['components'].values()), 2)
     assert first['allowedTransitions'] == ['CONFIRMED', 'REJECTED']
     assert data['structure']['name'] == 'indexed-binary-max-heap' and data['structure']['size'] == 3
+    assert data['tookMs'] >= 0  # Added by the measured decorator.
     assert medium['id'] not in [item['report']['id'] for item in data['items']]
 
 
@@ -70,6 +71,10 @@ def test_day_plan_visits_every_selected_stop(client):
     assert plan['totalMeters'] <= plan['priorityOrderMeters']
     lats = [stop['report']['location']['lat'] for stop in plan['stops']]
     assert lats == sorted(lats)  # A straight street is walked in order from the start point.
+    assert plan['algorithm'] == 'two-opt' and plan['algorithms'] == ['two-opt', 'nearest-neighbour', 'priority']
+    baseline = client.get('/api/operator/plan?limit=5&lat=1.1995&lng=-77.29&algorithm=priority').json()
+    assert baseline['savedPercent'] == 0 and baseline['totalMeters'] >= plan['totalMeters']
+    assert client.get('/api/operator/plan?algorithm=genetic').status_code == 422
     assert client.get('/api/operator/plan?lat=1.2').status_code == 422
     assert client.get('/api/operator/plan').json()['stops'][0]['legMeters'] is None
 

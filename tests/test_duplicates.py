@@ -74,3 +74,17 @@ def test_detector_validates_radius():
         DuplicateDetector([], 0.5)
     with pytest.raises(ValueError):
         DuplicateDetector([], 51)
+
+
+def test_both_neighbour_strategies_find_the_same_clusters():
+    rng = random.Random(9)
+    reports = [report(f'r{index}', 1.21 + rng.uniform(0, 0.002), -77.29 + rng.uniform(0, 0.002), timestamp=index)
+               for index in range(150)]
+    grid, brute = DuplicateDetector(reports, 10, 'grid'), DuplicateDetector(reports, 10, 'brute-force')
+    as_ids = lambda detector: [(c.canonical['id'], [d['id'] for d in c.duplicates]) for c in detector.clusters()]
+    assert as_ids(grid) == as_ids(brute)
+    assert brute.stats()['candidateChecks'] == brute.stats()['bruteForceChecks'] == 150 * 149 // 2
+    assert grid.stats()['candidateChecks'] < brute.stats()['candidateChecks']
+    assert (grid.stats()['method'], brute.stats()['method']) == ('grid', 'brute-force')
+    with pytest.raises(ValueError):
+        DuplicateDetector(reports, 10, 'quadtree')
