@@ -1,4 +1,5 @@
 """Review and merge duplicated pothole reports (Operator and Administrator roles)."""
+from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -33,9 +34,9 @@ class DuplicateService:
         self.app = request.app
         self.repo = request.app.state.repo
 
-    def review(self, radius: float) -> dict:
+    def review(self, radius: float, method: str = 'grid') -> dict:
         reports, _ = self.repo.list_reports(5000, 0, statuses=list(StatusWorkflow.OPEN_STATUSES))
-        detector = DuplicateDetector(reports, radius)
+        detector = DuplicateDetector(reports, radius, method)
         return {'clusters': [cluster.as_dict() for cluster in detector.clusters()], 'stats': detector.stats(),
                 'generatedAt': s.Clock.now()}
 
@@ -89,8 +90,9 @@ class DuplicatesController:
         self.router.add_api_route('/merge', self.merge_duplicates, methods=['POST'])
 
     def review_duplicates(self, request: Request,
-                          radius: float = Query(15, ge=DuplicateDetector.MIN_RADIUS, le=DuplicateDetector.MAX_RADIUS)):
-        return DuplicateService(request).review(radius)
+                          radius: float = Query(15, ge=DuplicateDetector.MIN_RADIUS, le=DuplicateDetector.MAX_RADIUS),
+                          method: Literal['grid', 'brute-force'] = 'grid'):
+        return DuplicateService(request).review(radius, method)
 
     def merge_duplicates(self, payload: MergeRequest, request: Request, session=Depends(field_staff),
                          _writer=Depends(forbid_demo_writes)):

@@ -40,6 +40,9 @@ def test_review_and_merge_duplicates(client):
     assert {item['id'] for item in cluster['duplicates']} == {twin_a, twin_b}
     assert review['stats']['estimatedPhysicalPotholes'] == 2 and review['stats']['duplicates'] == 2
     assert client.get('/api/operator/duplicates?radius=0').status_code == 422
+    brute = client.get('/api/operator/duplicates?radius=10&method=brute-force').json()
+    assert brute['stats']['method'] == 'brute-force' and len(brute['clusters']) == 1
+    assert brute['stats']['candidateChecks'] == brute['stats']['bruteForceChecks']
 
     merge = '/api/operator/duplicates/merge'
     assert client.post(merge, json={'canonicalReportId': first['id'], 'duplicateReportIds': [far['id']]}).status_code == 409
