@@ -162,6 +162,18 @@ class SessionGuard:
     def session_id(session=Depends(current.__func__)):
         return session['id']
 
+    @staticmethod
+    def require_roles(*roles):
+        """Dependency factory: allow only sessions whose role is one of ``roles``."""
+        if not roles or any(role not in Roles.ALL for role in roles):
+            raise ValueError('Unknown role in access rule')
+
+        def dependency(session=Depends(SessionGuard.current)):
+            if session['role'] not in roles:
+                raise HTTPException(403, 'Tu rol no tiene acceso a esta sección.')
+            return session
+        return dependency
+
 
 class LoginRateLimiter:
     """Shared limit of attempts per IP and per account over 10 minutes (stored as HMACs only)."""
