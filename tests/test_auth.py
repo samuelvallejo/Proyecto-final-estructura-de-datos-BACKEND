@@ -1,6 +1,6 @@
 import pytest
 from cryptography.fernet import Fernet
-from app.auth import Vault, password_hash, password_matches
+from app.auth import PasswordHasher, Vault
 from sqlalchemy import select
 from app import schema as s
 from test_postgres_api import client
@@ -8,11 +8,11 @@ from test_postgres_api import client
 
 def test_password_is_salted_and_not_reversible():
     password = 'An-example-password!12'
-    first, second = password_hash(password), password_hash(password)
+    first, second = PasswordHasher.hash(password), PasswordHasher.hash(password)
     assert first != second and password not in first
-    assert password_matches(password, first)
-    assert not password_matches('Wrong-password!12', first)
-    assert not password_matches(password, 'invalid')
+    assert PasswordHasher.matches(password, first)
+    assert not PasswordHasher.matches('Wrong-password!12', first)
+    assert not PasswordHasher.matches(password, 'invalid')
 
 
 def test_vault_ciphertext_and_lookup():
@@ -33,7 +33,7 @@ def test_registration_login_cookie_and_access_control(client):
     reply = client.post('/api/auth/register', json=registration)
     assert reply.status_code == 201 and reply.json() == {'message': 'Todo se ejecutó correctamente.'}
     with client.app.state.engine.connect() as conn:
-        # Las cuentas demo también existen: buscar la cuenta registrada por su identificador cifrado.
+        # Demo accounts also exist: look up the registered account by its encrypted identifier.
         row = conn.execute(select(s.users).where(s.users.c.email_lookup == client.app.state.vault.lookup(
             'email:private@example.com'))).mappings().one()
         assert credentials['email'].lower() not in row['email']

@@ -1,6 +1,6 @@
-"""GET a la API de Roboflow con la key de roboflow.env; nunca imprime la key.
+"""GET request to the Roboflow API with the key from roboflow.env; never prints the key.
 
-Uso: python rf_api.py <ruta o URL> [parametros extra como k=v ...]
+Usage: python rf_api.py <path or URL> [extra parameters as k=v ...]
 """
 import json
 import re
@@ -25,7 +25,7 @@ def get(path, **params):
             return response.status, json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as error:
         return error.code, error.read().decode('utf-8', 'replace')[:300].replace(key(), '***')
-    except Exception as error:  # Nunca propagar la URL: contiene la key.
+    except Exception as error:  # Never propagate the URL: it contains the key.
         return 0, f'{type(error).__name__}: ' + str(error).replace(key(), '***')[:200]
 
 

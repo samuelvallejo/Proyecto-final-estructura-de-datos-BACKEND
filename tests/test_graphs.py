@@ -3,7 +3,7 @@ import random
 import pytest
 from app.graphs import WeightedGraph
 from app.report_graphs import ReportProximityGraph
-from app.repository import distance
+from app.geo import GeoMath
 from tree_helpers import report
 
 
@@ -22,7 +22,7 @@ def test_undirected_edges_update_and_removal_preserve_neighbors():
     assert g.adjacency['a']['b'] == g.adjacency['b']['a'] == 7
     assert len(g.edges()) == 2
     g.remove_vertex('b')
-    assert g.adjacency == {'a': {}, 'c': {}}
+    assert g.as_dict() == {'a': {}, 'c': {}}
     g.remove_vertex('missing'); g.remove_edge('a', 'c')
 
 
@@ -31,7 +31,7 @@ def test_invalid_weights_rejected_without_mutation(weight):
     g = graph('ab', [])
     with pytest.raises(ValueError):
         g.add_edge('a', 'b', weight)
-    assert g.adjacency == {'a': {}, 'b': {}}
+    assert g.as_dict() == {'a': {}, 'b': {}}
 
 
 def test_invalid_vertices_edges_and_orders():
@@ -98,7 +98,7 @@ def test_report_network_uses_real_distance_chain_and_isolated_components():
     assert snapshot['metrics'] == {'vertices': 4, 'edges': 2, 'components': 2, 'isolated': 1, 'maxDegree': 2}
     assert snapshot['traversal']['reportIds'] == ['a', 'b', 'c']
     assert snapshot['path']['reportIds'] == ['a', 'b', 'c']
-    assert snapshot['path']['distanceMeters'] == pytest.approx(distance(reports[0]['location'], reports[1]['location']) * 2)
+    assert snapshot['path']['distanceMeters'] == pytest.approx(GeoMath.distance(reports[0]['location'], reports[1]['location']) * 2)
     assert len(ReportProximityGraph(reports, 250).snapshot()['edges']) == 3
 
 

@@ -9,7 +9,7 @@ import pytest
 import torch
 from PIL import Image
 from app.config import Settings
-from app.pothole_detector import PotholeDetector, ModelUnavailable, validate_photo, MAX_PHOTO_BYTES
+from app.pothole_detector import ModelUnavailable, PhotoValidator, PotholeDetector
 from test_postgres_api import client, token
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'pothole.jpg'
@@ -24,13 +24,13 @@ def image_bytes(format='JPEG', size=(320, 200), exif=None):
 
 def test_provided_model_checksum_class_mapping_and_actual_inference(custom_detector):
     assert hashlib.sha256((FIXTURE.parents[2] / 'models' / 'best.pt').read_bytes()).hexdigest() == Settings(_env_file=None).yolo_model_sha256
-    assert custom_detector.names == {0: 'pothole'}  # Metadatos reales de bachescan-v2.
+    assert dict(custom_detector.names.items()) == {0: 'pothole'}  # Real bachescan-v2 metadata.
     assert custom_detector.class_id == 0 and custom_detector.device == 'cpu'
     with Image.open(FIXTURE) as image:
         result = custom_detector.detect(image)
-    assert result['ancho'] == 960 and result['alto'] == 640 and result['total_baches'] >= 1
-    assert all(item['clase'] == 'pothole' and .25 <= item['confianza'] <= 1 for item in result['detecciones'])
-    assert custom_detector.detect(Image.new('RGB', (320, 200), '#888888'))['total_baches'] == 0
+    assert result['width'] == 960 and result['height'] == 640 and result['count'] >= 1
+    assert all(item['label'] == 'pothole' and .25 <= item['confidence'] <= 1 for item in result['detections'])
+    assert custom_detector.detect(Image.new('RGB', (320, 200), '#888888'))['count'] == 0
 
 def test_upload_authenticated_contract_and_pixels(client):
     assert photo(client).status_code == 401
@@ -38,12 +38,12 @@ def test_upload_authenticated_contract_and_pixels(client):
     reply = photo(client)
     assert reply.status_code == 200, reply.text
     body = reply.json()
-    assert set(body) == {'total_baches', 'ancho', 'alto', 'detecciones'}
-    assert body['total_baches'] == len(body['detecciones']) >= 1
-    for detection in body['detecciones']:
+    assert set(body) == {'count', 'width', 'height', 'detections'}
+    assert body['count'] == len(body['detections']) >= 1
+    for detection in body['detections']:
         x1, y1, x2, y2 = detection['bbox']
-        assert 0 <= x1 < x2 <= body['ancho'] and 0 <= y1 < y2 <= body['alto']
-        assert detection['clase'] == 'pothole' and .25 <= detection['confianza'] <= 1
+        assert 0 <= x1 < x2 <= body['width'] and 0 <= y1 < y2 <= body['height']
+        assert detection['label'] == 'pothole' and .25 <= detection['confidence'] <= 1
     assert client.get('/api/reports').json()['total'] == 0  # A photo does not invent geographic reports.
 
 @pytest.mark.parametrize(('format', 'mime'), [('JPEG', 'image/jpeg'), ('PNG', 'image/png'), ('WEBP', 'image/webp')])
@@ -51,14 +51,14 @@ def test_empty_detections_all_supported_formats(client, format, mime):
     token(client)
     reply = photo(client, image_bytes(format), mime)
     assert reply.status_code == 200
-    assert reply.json() == {'total_baches': 0, 'ancho': 320, 'alto': 200, 'detecciones': []}
+    assert reply.json() == {'count': 0, 'width': 320, 'height': 200, 'detections': []}
 
 def test_upload_validation_and_model_error_are_safe(client, monkeypatch):
     token(client)
     assert photo(client, b'not-an-image').status_code == 400
     assert photo(client, b'', 'image/jpeg').status_code == 400
     assert photo(client, b'<svg/>', 'image/svg+xml').status_code == 415
-    assert photo(client, b'x' * (MAX_PHOTO_BYTES + 1)).status_code == 413
+    assert photo(client, b'x' * (PhotoValidator.MAX_BYTES + 1)).status_code == 413
     assert photo(client, image_bytes(size=(16, 32))).status_code == 400
     assert photo(client, image_bytes('PNG'), 'image/jpeg').status_code == 400
     assert client.post('/api/detect/potholes').status_code == 422
@@ -69,7 +69,7 @@ def test_upload_validation_and_model_error_are_safe(client, monkeypatch):
 
 def test_oriented_original_dimensions():
     exif = Image.Exif(); exif[274] = 6
-    with validate_photo(image_bytes(size=(80, 160), exif=exif), 'image/jpeg') as image:
+    with PhotoValidator.validate(image_bytes(size=(80, 160), exif=exif), 'image/jpeg') as image:
         assert image.size == (160, 80)
 
 def test_valid_photo_larger_than_one_megabyte(client):
@@ -79,10 +79,10 @@ def test_valid_photo_larger_than_one_megabyte(client):
     buffer = io.BytesIO()
     Image.fromarray(pixels).save(buffer, 'JPEG', quality=95)
     data = buffer.getvalue()
-    assert 1024 * 1024 < len(data) <= MAX_PHOTO_BYTES
+    assert 1024 * 1024 < len(data) <= PhotoValidator.MAX_BYTES
     reply = photo(client, data)
     assert reply.status_code == 200, reply.text
-    assert (reply.json()['ancho'], reply.json()['alto']) == (1920, 1080)
+    assert (reply.json()['width'], reply.json()['height']) == (1920, 1080)
 
 def test_missing_or_wrong_weights_do_not_download(tmp_path):
     missing = PotholeDetector(Settings(_env_file=None, pothole_model_path=str(tmp_path/'best.pt')))
@@ -106,7 +106,7 @@ def test_single_load_reused_predictor_and_clipped_pixels():
     with ThreadPoolExecutor(2) as executor:
         results = list(executor.map(lambda _: detector.detect(Image.new('RGB', (320, 200))), range(2)))
     assert state['loads'] == state['peak'] == 1
-    assert results[0]['detecciones'][0]['bbox'] == [0., 0., 320., 200.]
+    assert results[0]['detections'][0]['bbox'] == [0., 0., 320., 200.]
 
 def test_live_stretch_resizes_input_and_maps_boxes_back():
     seen = {}
@@ -117,8 +117,8 @@ def test_live_stretch_resizes_input_and_maps_boxes_back():
     detector = PotholeDetector(Settings(_env_file=None), model_factory=lambda path, task: SimpleNamespace(names={0: 'pothole'}, task=task, predict=predict))
     result = detector.detect(Image.new('RGB', (832, 416)), 416, stretch=True)
     assert seen == {'size': (416, 416), 'imgsz': 416}
-    assert result['ancho'] == 832 and result['alto'] == 416
-    assert result['detecciones'][0]['bbox'] == [208., 104., 416., 312.]
+    assert result['width'] == 832 and result['height'] == 416
+    assert result['detections'][0]['bbox'] == [208., 104., 416., 312.]
 
 
 def test_photo_inference_does_not_block_api_event_loop(client, monkeypatch):
@@ -126,7 +126,7 @@ def test_photo_inference_does_not_block_api_event_loop(client, monkeypatch):
     started, finish = threading.Event(), threading.Event()
     def slow(image):
         started.set(); finish.wait(5)
-        return {'total_baches': 0, 'ancho': image.width, 'alto': image.height, 'detecciones': []}
+        return {'count': 0, 'width': image.width, 'height': image.height, 'detections': []}
     monkeypatch.setattr(client.app.state.detector, 'detect', slow)
     with ThreadPoolExecutor(1) as executor:
         job = executor.submit(photo, client)

@@ -1,11 +1,11 @@
-"""Roles, cuentas activas, duración de sesiones y pasos por baches conocidos.
+"""Roles, active accounts, session duration and passes over known potholes.
 
-Todo es aditivo: no modifica ni elimina reportes, cuentas ni recorridos existentes.
+Everything is additive: no existing report, account or trip is changed or removed.
 """
 from alembic import op
 from sqlalchemy import BigInteger, Boolean, Column, inspect, true
 from sqlalchemy.dialects.postgresql import insert
-from app.schema import pothole_passes, roles, uid, now
+from app.schema import pothole_passes, roles, Ids, Clock
 
 revision = '0004'
 down_revision = '0003'
@@ -31,7 +31,7 @@ def upgrade():
     if 'ix_audit_events_recent' not in audit_indexes:
         op.create_index('ix_audit_events_recent', 'audit_events', ['created_at'])
     for name in ROLE_NAMES:
-        bind.execute(insert(roles).values(id=uid(), created_at=now(), name=name).on_conflict_do_nothing(index_elements=['name']))
+        bind.execute(insert(roles).values(id=Ids.new(), created_at=Clock.now(), name=name).on_conflict_do_nothing(index_elements=['name']))
 
 
 def downgrade():

@@ -1,6 +1,6 @@
-"""Compara modelos sobre la franja de vía de un video y guarda una hoja con las detecciones.
+"""Compares models on the road strip of a video and saves a contact sheet with the detections.
 
-Uso: python eval_video.py video.mp4 salida.jpg modelo1.pt [modelo2.pt ...]
+Usage: python eval_video.py video.mp4 output.jpg model1.pt [model2.pt ...]
 """
 import statistics
 import sys
@@ -18,7 +18,7 @@ for second in [x * .5 for x in range(0, 30)]:
     cap.set(cv2.CAP_PROP_POS_FRAMES, int(second * fps))
     ok, frame = cap.read()
     if ok:
-        frames.append(frame[352:672, :])  # Franja de la vía en el video vertical.
+        frames.append(frame[352:672, :])  # Road strip in the vertical video.
 rows = []
 for path in models:
     model = YOLO(path)

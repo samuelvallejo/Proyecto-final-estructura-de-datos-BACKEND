@@ -1,26 +1,63 @@
-"""Colas FIFO por trabajador; asignación round robin mediante lista circular."""
+"""Scan pipeline: one FIFO queue per worker and round-robin assignment through a circular list."""
 import asyncio
-from .structures import Queue, CircularSinglyLinkedList, SinglyLinkedList, DoublyLinkedList, Deque
+
+from .structures import (CircularSinglyLinkedList, Deque, DoublyLinkedList, DynamicArray, Queue,
+                         SinglyLinkedList, Sorter)
+
+
+class LatencyWindow:
+    """Sliding window of the last ``capacity`` latencies (ms) kept in a deque."""
+
+    def __init__(self, capacity: int = 100):
+        self.capacity = capacity
+        self.values = Deque[int]()
+
+    def add(self, milliseconds: int) -> None:
+        self.values.append(milliseconds)
+        if self.values.size > self.capacity:
+            self.values.popleft()
+
+    @property
+    def size(self) -> int:
+        return self.values.size
+
+    def summary(self) -> dict:
+        """Median (p50) and 95th percentile computed over a sorted copy of the window."""
+        ordered = DynamicArray(Sorter.merge_sort(self.values))
+        if not ordered.size:
+            return {'samples': 0, 'p50': None, 'p95': None}
+        count = ordered.size
+        return {'samples': count, 'p50': ordered[(count - 1) // 2],
+                'p95': ordered[max(0, (95 * count + 99) // 100 - 1)]}
 
 
 class ScanPipeline:
-    def __init__(self, maximum=8):
+    WORKERS = 2
+    HISTORY_LIMIT = 100
+
+    def __init__(self, maximum: int = 8):
         self.maximum = maximum
         self.pending = 0
-        self.queues = [Queue(), Queue()]
-        self.events = [asyncio.Event(), asyncio.Event()]
+        self.queues = DynamicArray(Queue() for _ in range(self.WORKERS))
+        self.events = DynamicArray(asyncio.Event() for _ in range(self.WORKERS))
         self.workers = CircularSinglyLinkedList[int]()
-        for index in range(2):
+        for index in range(self.WORKERS):
             self.workers.append(index)
-        self.tasks = []
+        self.tasks = DynamicArray[asyncio.Task]()
         self.timeline = SinglyLinkedList[dict]()
         self.history = DoublyLinkedList[dict]()
-        self.latencies = Deque[int]()
+        self.latency_window = LatencyWindow(self.HISTORY_LIMIT)
 
-    def start(self):
-        self.tasks = [asyncio.create_task(self.run(index)) for index in range(2)]
+    @property
+    def latencies(self) -> Deque[int]:
+        return self.latency_window.values
+
+    def start(self) -> None:
+        for index in range(self.WORKERS):
+            self.tasks.append(asyncio.create_task(self.run(index)))
 
     async def submit(self, operation):
+        """Queue ``operation`` on the next worker (round robin) and wait for its result."""
         if self.pending >= self.maximum:
             raise OverflowError('La cola de análisis está llena. Reintenta en unos segundos.')
         self.pending += 1
@@ -30,7 +67,7 @@ class ScanPipeline:
         self.events[index].set()
         return await future
 
-    async def run(self, index):
+    async def run(self, index: int) -> None:
         while True:
             await self.events[index].wait()
             while self.queues[index].size:
@@ -47,34 +84,27 @@ class ScanPipeline:
                     self.pending -= 1
             self.events[index].clear()
 
-    def remember(self, event, duration):
+    def remember(self, event: dict, duration: int) -> None:
         self.timeline.append(event)
         self.history.append(event)
-        self.latencies.append(duration)
-        if self.timeline.size > 100:
+        self.latency_window.add(duration)
+        if self.timeline.size > self.HISTORY_LIMIT:
             self.timeline.popleft()
-        if self.history.size > 100:
+        if self.history.size > self.HISTORY_LIMIT:
             self.history.popleft()
-        if self.latencies.size > 100:
-            self.latencies.popleft()
 
-    def stats(self):
-        samples = sorted(self.latencies.items)
-        total_latency = {
-            'samples': len(samples),
-            'p50': samples[(len(samples) - 1) // 2] if samples else None,
-            'p95': samples[max(0, (95 * len(samples) + 99) // 100 - 1)] if samples else None,
-        }
+    def stats(self) -> dict:
         return {
             'singlyLinkedList': {'size': self.timeline.size, 'use': 'Eventos de escaneo en orden de llegada'},
             'doublyLinkedList': {'size': self.history.size, 'use': 'Historial de resultados en ambos sentidos'},
             'circularSinglyLinkedList': {'size': self.workers.size, 'use': 'Asignación round robin de trabajadores'},
-            'queue': {'size': sum(q.size for q in self.queues), 'runningAndQueued': self.pending, 'use': 'Trabajos de análisis FIFO por trabajador'},
-            'deque': {'size': self.latencies.size, 'use': 'Ventana de latencias de los últimos 100 análisis'},
-            'totalLatencyMs': total_latency,
+            'queue': {'size': sum(queue.size for queue in self.queues), 'runningAndQueued': self.pending,
+                      'use': 'Trabajos de análisis FIFO por trabajador'},
+            'deque': {'size': self.latency_window.size, 'use': 'Ventana de latencias de los últimos 100 análisis'},
+            'totalLatencyMs': self.latency_window.summary(),
         }
 
-    async def close(self):
+    async def close(self) -> None:
         for task in self.tasks:
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)

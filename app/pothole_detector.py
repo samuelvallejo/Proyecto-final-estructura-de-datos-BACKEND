@@ -9,14 +9,12 @@ import warnings
 from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
 from .contracts import Analysis, BoundingBox, DamageDetection
+from .structures import HashMap, SinglyLinkedList
 
 # Ultralytics patches Image.open to auto-register HEIF on unknown input. Keep Pillow's
 # decoder for our explicit format allow-list so invalid uploads never install plugins.
 _open_image = Image.open
 
-MAX_PHOTO_BYTES = 4 * 1024 * 1024
-MAX_PHOTO_PIXELS = 16_000_000
-PHOTO_TYPES = {'image/jpeg': 'JPEG', 'image/png': 'PNG', 'image/webp': 'WEBP'}
 MODEL_UNAVAILABLE = 'No se pudo cargar el modelo de detección de baches. Contacta al administrador.'
 logger = logging.getLogger(__name__)
 
@@ -25,31 +23,40 @@ class ModelUnavailable(RuntimeError):
     pass
 
 
-def validate_photo(data: bytes, content_type: str) -> Image.Image:
-    if not data or len(data) > MAX_PHOTO_BYTES:
-        raise ValueError('La imagen debe pesar entre 1 byte y 4 MB.')
-    if content_type not in PHOTO_TYPES:
-        raise ValueError('Selecciona una imagen JPEG, PNG o WebP.')
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('error', Image.DecompressionBombWarning)
-            with _open_image(io.BytesIO(data), formats=['JPEG', 'PNG', 'WEBP']) as image:
-                if image.format != PHOTO_TYPES[content_type] or getattr(image, 'n_frames', 1) != 1:
-                    raise ValueError('El contenido no corresponde a una imagen JPEG, PNG o WebP estática válida.')
-                if min(image.size) < 32 or max(image.size) > 8192 or image.width * image.height > MAX_PHOTO_PIXELS:
-                    raise ValueError('La imagen debe tener lados de 32 a 8192 píxeles y como máximo 16 megapíxeles.')
-                image.load()
-                return ImageOps.exif_transpose(image).convert('RGB')
-    except (OSError, UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning, SyntaxError) as exc:
-        raise ValueError('No se pudo leer la imagen. Selecciona un archivo válido.') from exc
+class PhotoValidator:
+    """Decodes an uploaded still photo only when its bytes match an allowed static format."""
+    MAX_BYTES = 4 * 1024 * 1024
+    MAX_PIXELS = 16_000_000
+    TYPES = {'image/jpeg': 'JPEG', 'image/png': 'PNG', 'image/webp': 'WEBP'}
+
+    @classmethod
+    def validate(cls, data: bytes, content_type: str) -> Image.Image:
+        if not data or len(data) > cls.MAX_BYTES:
+            raise ValueError('La imagen debe pesar entre 1 byte y 4 MB.')
+        if content_type not in cls.TYPES:
+            raise ValueError('Selecciona una imagen JPEG, PNG o WebP.')
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('error', Image.DecompressionBombWarning)
+                with _open_image(io.BytesIO(data), formats=['JPEG', 'PNG', 'WEBP']) as image:
+                    if image.format != cls.TYPES[content_type] or getattr(image, 'n_frames', 1) != 1:
+                        raise ValueError('El contenido no corresponde a una imagen JPEG, PNG o WebP estática válida.')
+                    if min(image.size) < 32 or max(image.size) > 8192 or image.width * image.height > cls.MAX_PIXELS:
+                        raise ValueError('La imagen debe tener lados de 32 a 8192 píxeles y como máximo 16 megapíxeles.')
+                    image.load()
+                    return ImageOps.exif_transpose(image).convert('RGB')
+        except (OSError, UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning, SyntaxError) as exc:
+            raise ValueError('No se pudo leer la imagen. Selecciona un archivo válido.') from exc
 
 
 class PotholeDetector:
+    """Custom YOLOv8 checkpoint, verified by SHA-256 before loading and shared by every request."""
+
     def __init__(self, settings, model_factory=None):
         self.model = None
         self.model_name = 'best.pt'
         self.device = 'cpu'
-        self.names = {}
+        self.names = HashMap[int, str]()
         self.class_id = settings.yolo_pothole_class_id
         self.confidence = settings.yolo_confidence
         self.image_size = settings.yolo_image_size
@@ -80,7 +87,7 @@ class PotholeDetector:
                 raise ValueError('cuda_unavailable')
             self.device = 'cuda:0' if requested != 'cpu' and torch.cuda.is_available() else 'cpu'
             self.model = (model_factory or YOLO)(str(path), task='detect')
-            self.names = {int(key): str(value) for key, value in self.model.names.items()}
+            self.names = HashMap((int(key), str(value)) for key, value in self.model.names.items())
             if self.class_id not in self.names or self.model.task != 'detect':
                 raise ValueError('pothole_class_missing')
             # The provided single-class checkpoint names class 0 "0". Mapping is explicit in config.
@@ -89,7 +96,7 @@ class PotholeDetector:
                 raise ValueError('unexpected_class_label')
             if model_factory is None:
                 with Image.new('RGB', (640, 640), '#888888') as blank:
-                    # Inicializa el predictor y precalienta ambas resoluciones antes de atender peticiones.
+                    # Initialise the predictor and warm up both resolutions before serving requests.
                     self.detect(blank)
                     if self.live_image_size != self.image_size or self.live_stretch:
                         self.detect(blank, self.live_image_size, self.live_stretch)
@@ -107,7 +114,7 @@ class PotholeDetector:
         size = image_size or self.image_size
         source, scale_x, scale_y = image, 1., 1.
         if stretch:
-            # Estirar al cuadrado de entrada (sin bordes grises), como las imágenes «Stretch to 640» del entrenamiento.
+            # Stretch to the square input (no grey padding), like the "Stretch to 640" training images.
             source = image.resize((size, size), Image.Resampling.BILINEAR)
             scale_x, scale_y = image.width / size, image.height / size
         # Ultralytics mutates its predictor; serialize all photo/live calls on this shared instance.
@@ -117,7 +124,7 @@ class PotholeDetector:
                 half=self.device.startswith('cuda'),
                 save=False, save_txt=False, show=False, verbose=False)
             result = predictions[0]
-            detections = []
+            detections = SinglyLinkedList[dict]()
             if result.boxes is not None:
                 coordinates = result.boxes.xyxy.detach().cpu().tolist()
                 confidences = result.boxes.conf.detach().cpu().tolist()
@@ -129,28 +136,30 @@ class PotholeDetector:
                     xmax, ymax = max(0., min(float(bbox[2]) * scale_x, image.width)), max(0., min(float(bbox[3]) * scale_y, image.height))
                     if xmax <= xmin or ymax <= ymin:
                         continue
-                    detections.append({'clase': 'pothole', 'confianza': round(float(confidence), 6),
+                    detections.append({'label': 'pothole', 'confidence': round(float(confidence), 6),
                                        'bbox': [round(v, 3) for v in (xmin, ymin, xmax, ymax)]})
-            return {'total_baches': len(detections), 'ancho': image.width, 'alto': image.height, 'detecciones': detections}
+            return {'count': len(detections), 'width': image.width, 'height': image.height, 'detections': list(detections)}
 
     def analyze(self, image: Image.Image, image_size: int | None = None, stretch: bool = False) -> Analysis:
-        # Primero con bordes grises; si no aparece nada y se pidió, se repite estirando la imagen
-        # (como el teléfono). Así el servidor confirma lo que el teléfono detectó con cualquiera de los dos.
+        # First with grey padding; if nothing shows up and it was requested, retry stretching the image
+        # (like the phone does). This way the server confirms what the phone found with either mode.
         result = self.detect(image, image_size)
-        if stretch and not result['detecciones']:
+        if stretch and not result['detections']:
             result = self.detect(image, image_size, stretch=True)
-        hits = []
-        for item in result['detecciones'][:20]:
+        hits = SinglyLinkedList[DamageDetection]()
+        for index, item in enumerate(result['detections']):
+            if index == 20:
+                break
             xmin, ymin, xmax, ymax = item['bbox']
             box = BoundingBox(xmin=xmin/image.width*1000, ymin=ymin/image.height*1000,
                               xmax=xmax/image.width*1000, ymax=ymax/image.height*1000)
             area = (xmax-xmin)*(ymax-ymin)/(image.width*image.height)
-            hits.append(DamageDetection(boundingBox=box, confidence=item['confianza'],
+            hits.append(DamageDetection(boundingBox=box, confidence=item['confidence'],
                 hazardScore=85 if area >= .35 else 70 if area >= .18 else 50 if area >= .06 else 35,
-                aiDescription=f"Posible bache; confianza de YOLO personalizado {round(item['confianza']*100)}%. Requiere verificación.",
+                aiDescription=f"Posible bache; confianza de YOLO personalizado {round(item['confidence']*100)}%. Requiere verificación.",
                 riskFactors=['Daño visible en la calzada', f'El recuadro ocupa aproximadamente {round(area*100)}% del encuadre', 'Profundidad y dimensiones físicas sin medir']))
         if not hits:
             return Analysis(isPothole=False, potholeType=None, hazardScore=0,
                             aiDescription='No se detectaron baches por encima del umbral de confianza.', riskFactors=[])
         principal = max(hits, key=lambda hit: hit.hazardScore)
-        return Analysis(isPothole=True, **principal.model_dump(), detections=hits)
+        return Analysis(isPothole=True, **principal.model_dump(), detections=list(hits))

@@ -1,4 +1,4 @@
-"""Esquema inicial PostgreSQL congelado en SQL para migraciones reproducibles."""
+"""Initial PostgreSQL schema frozen as SQL for reproducible migrations."""
 from pathlib import Path
 from alembic import op
 

@@ -15,7 +15,7 @@ def test_trip_encryption_ownership_and_finalization(client):
         assert '3.45' not in conn.execute(select(s.trip_samples.c.encrypted_position)).scalar_one()
     assert client.post('/api/trips', json=payload).status_code == 409
     with client.app.state.engine.begin() as conn:
-        conn.execute(update(s.trip_samples).values(created_at=s.now()-5000))
+        conn.execute(update(s.trip_samples).values(created_at=s.Clock.now()-5000))
     assert client.post(f"/api/trips/{trip['id']}/samples", json={'position': {'lat': 3.46, 'lng': -76.54, 'accuracy': 8}}).status_code == 200
     end = client.post(f"/api/trips/{trip['id']}/finish", json={'position': None})
     assert end.status_code == 200 and end.json()['endedAt']

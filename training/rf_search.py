@@ -1,4 +1,4 @@
-"""Busca datasets de detección de baches en Roboflow Universe y muestra tamaño, licencia y clases."""
+"""Searches Roboflow Universe for pothole-detection datasets and shows size, license and classes."""
 import sys
 from rf_api import get
 

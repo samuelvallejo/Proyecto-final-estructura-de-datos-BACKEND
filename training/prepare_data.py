@@ -1,7 +1,7 @@
-"""Descarga datasets públicos de Roboflow (YOLOv8) y los une en uno solo con la clase 0 = bache.
+"""Downloads public Roboflow datasets (YOLOv8) and merges them into one with class 0 = pothole.
 
-Uso: python prepare_data.py workspace/proyecto/version [...]
-La API key se lee de roboflow.env (ROBOFLOW_API_KEY) y nunca se imprime.
+Usage: python prepare_data.py workspace/project/version [...]
+The API key is read from roboflow.env (ROBOFLOW_API_KEY) and is never printed.
 """
 import os
 import re
@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent
-# En Windows conviene una ruta corta (límite de 260 caracteres): BACHESCAN_TRAIN_DIR=C:/bachescan-train
+# On Windows a short path helps (260-character limit): BACHESCAN_TRAIN_DIR=C:/bachescan-train
 DATA = Path(os.environ.get('BACHESCAN_TRAIN_DIR', ROOT / 'data'))
 RAW = DATA / 'raw'
 MERGED = DATA / 'merged'
@@ -29,7 +29,7 @@ def api_key():
 
 
 def download(spec):
-    """Exporta la versión en formato YOLOv8 con la API REST de Roboflow y la descomprime."""
+    """Exports the version in YOLOv8 format through the Roboflow REST API and unzips it."""
     import time
     import urllib.request
     import zipfile
@@ -39,12 +39,12 @@ def download(spec):
     if (target / 'data.yaml').exists():
         return target
     archive = RAW / f'{target.name}.zip'
-    if archive.exists():  # Zip ya descargado: solo descomprimir.
+    if archive.exists():  # Zip already downloaded: only unzip it.
         with zipfile.ZipFile(archive) as bundle:
             bundle.extractall(target)
         archive.unlink()
         return target
-    for attempt in range(40):  # Roboflow prepara la exportación la primera vez; puede tardar.
+    for attempt in range(40):  # Roboflow prepares the export the first time; it can take a while.
         status, body = get(f'{workspace}/{project}/{version}/yolov8')
         link = body.get('export', {}).get('link') if isinstance(body, dict) else None
         if status == 200 and link:
@@ -72,7 +72,7 @@ def download(spec):
 
 
 def pothole_classes(names):
-    """Índices de clase que representan baches; un dataset de una sola clase cuenta completo."""
+    """Class indices that represent potholes; a single-class dataset counts entirely."""
     names = list(names.values()) if isinstance(names, dict) else list(names)
     if len(names) == 1:
         return {0}
@@ -103,7 +103,7 @@ def merge(folders):
                         parts = line.split()
                         if len(parts) >= 5 and int(float(parts[0])) in keep:
                             coords = [float(value) for value in parts[1:]]
-                            if len(coords) > 4:  # Polígono de segmentación -> caja envolvente.
+                            if len(coords) > 4:  # Segmentation polygon -> bounding box.
                                 xs, ys = coords[0::2], coords[1::2]
                                 x1, x2, y1, y2 = min(xs), max(xs), min(ys), max(ys)
                                 coords = [(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1]

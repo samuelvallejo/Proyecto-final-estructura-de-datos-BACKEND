@@ -1,9 +1,9 @@
-"""Modo administrador, cuentas demo, perfil, historial por sesión, pasos por baches y panel."""
+"""Admin mode, demo accounts, profile, per-session history, pothole passes and dashboard."""
 import uuid
 from sqlalchemy import select, func
 from app import schema as s
 from app.contracts import Analysis
-from test_postgres_api import client  # noqa: F401  (fixture PostgreSQL real)
+from test_postgres_api import client  # noqa: F401  (real PostgreSQL fixture)
 
 POSITION = {'lat': 4.6097, 'lng': -74.0817, 'accuracy': 8}
 
@@ -33,7 +33,7 @@ def save_pothole(client):
                 'neighborhood': 'Centro', 'city': 'Bogotá', 'region': 'Bogotá DC', 'countryCode': 'co',
                 'country': 'Colombia', 'fullAddress': 'Calle 1, Centro, Bogotá'}
     client.app.state.geocoder.resolve = geocode
-    response = client.post('/api/community/reports', json={'position': POSITION, 'capturedAt': s.now(),
+    response = client.post('/api/community/reports', json={'position': POSITION, 'capturedAt': s.Clock.now(),
                                                            'risk': 'HIGH', 'description': 'Hueco profundo en el carril'})
     assert response.status_code == 201, response.text
     return response.json()['report']
@@ -47,7 +47,7 @@ def test_demo_accounts_roles_and_admin_access(client):
     me = client.get('/api/me').json()
     assert me['role'] == 'Conductor' and not me['isAdmin'] and me['initials'] == 'CD'
     assert client.get('/api/admin/overview').status_code == 403
-    # Administrador: ve todo.
+    # Administrator: sees everything.
     login(client, accounts['Administrador']['email'], accounts['Administrador']['password'])
     assert client.get('/api/auth/session').json()['role'] == 'Administrador'
     overview = client.get('/api/admin/overview').json()
@@ -55,7 +55,7 @@ def test_demo_accounts_roles_and_admin_access(client):
     users = client.get('/api/admin/users').json()['users']
     assert {user['email'] for user in users} >= {item['email'] for item in accounts.values()}
     assert all('password' not in user and 'password_hash' not in user for user in users)
-    # Muchos inicios de sesión correctos con una cuenta demo compartida no la bloquean.
+    # Many successful logins with a shared demo account do not lock it.
     for _ in range(12):
         login(client, accounts['Operario']['email'], accounts['Operario']['password'])
 
@@ -70,7 +70,7 @@ def test_admin_manages_roles_accounts_and_status(client):
     assert client.post(f"/api/admin/users/{target['id']}/role", json={'role': 'Rey'}).status_code == 422
     me = client.get('/api/me').json()
     assert client.post(f"/api/admin/users/{me['id']}/active", json={'active': False}).status_code == 409
-    # Desactivar cierra el acceso de la cuenta.
+    # Deactivating closes the account's access.
     assert client.post(f"/api/admin/users/{target['id']}/active", json={'active': False}).json()['active'] is False
     client.cookies.clear()
     assert client.post('/api/auth/login', json=person).status_code == 401
@@ -96,7 +96,7 @@ def test_passes_count_people_per_pothole_and_profile_history(client):
     far = {'lat': POSITION['lat'] + 0.01, 'lng': POSITION['lng'], 'accuracy': 6}
     assert client.post('/api/passes', json={'position': far}).json()['passed'] == 0
     assert client.post('/api/passes', json={'position': near}).json()['passed'] == 1
-    assert client.post('/api/passes', json={'position': near}).json()['passed'] == 0  # Mismo paso en 10 minutos.
+    assert client.post('/api/passes', json={'position': near}).json()['passed'] == 0  # Same pass within 10 minutes.
     assert client.post('/api/passes', json={'position': {**near, 'accuracy': 80}}).json()['passed'] == 0
     login(client, second['email'], second['password'])
     assert client.post('/api/passes', json={'position': near}).json()['passed'] == 1

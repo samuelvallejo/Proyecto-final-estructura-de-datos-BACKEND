@@ -1,4 +1,4 @@
-"""Pruebas en un esquema temporal de PostgreSQL real, nunca en SQLite."""
+"""Tests on a temporary schema of a real PostgreSQL server, never on SQLite."""
 import os
 import uuid
 import io
@@ -13,10 +13,11 @@ from app.config import Settings
 from app.main import create_app
 from app import schema as s
 from app.contracts import Analysis
-from app.repository import Repository, distance
+from app.geo import GeoMath
+from app.repository import Repository
 
 URL = os.environ.get('TEST_DATABASE_URL')
-pytestmark = pytest.mark.skipif(not URL, reason='Configura TEST_DATABASE_URL para pruebas PostgreSQL reales')
+pytestmark = pytest.mark.skipif(not URL, reason='Set TEST_DATABASE_URL for real PostgreSQL tests')
 FIXTURE = Path(__file__).parents[2] / 'backend/tests/fixtures/pothole.jpg'
 
 
@@ -40,7 +41,7 @@ def client(monkeypatch, custom_detector):
                         data_encryption_key=Fernet.generate_key().decode(), secure_cookies=False,
                         local_scan_interval_seconds=0,
                         nominatim_user_agent='', gemini_api_key='', max_scans_per_hour=100)
-    # str(URL) oculta contraseñas; render explícito necesario si el servidor usa password.
+    # str(URL) hides passwords; an explicit render is needed when the server uses one.
     settings.database_url = scoped.render_as_string(hide_password=False)
     app = create_app(settings)
     try:
@@ -94,12 +95,12 @@ def test_migration_scan_persistence_deduplication_and_geography(client):
         for relation in [s.countries, s.regions, s.cities, s.neighborhoods, s.roads, s.zones, s.reports,
                          s.potholes, s.risk_assessments, s.audit_events, s.status_events]:
             expected = count if relation.name in ('reports', 'potholes', 'risk_assessments', 'audit_events', 'status_events') else 1
-            # La huella de sesión también guarda inicios de sesión, escaneos y pasos: contar solo reportes creados.
+            # The session trail also stores logins, scans and passes: count only created reports.
             where = [s.audit_events.c.action == 'report.created'] if relation is s.audit_events else []
             assert conn.execute(select(func.count()).select_from(relation).where(*where)).scalar_one() == expected
         assert conn.execute(select(func.count()).select_from(s.analyses)).scalar_one() == 2 * count
-    # Nueva instancia del repositorio: reportes independientes de las estructuras en memoria.
-    # El segundo escaneo del mismo hueco suma un paso; el resto del reporte es idéntico.
+    # New repository instance: reports independent from the in-memory structures.
+    # The second scan of the same pothole adds a pass; the rest of the report is identical.
     stored = Repository(engine, client.app.state.repo.settings).get_report(report['id'])
     volatile = {'passCount', 'peopleCount', 'lastPassAt'}
     assert {k: v for k, v in stored.items() if k not in volatile} == {k: v for k, v in report.items() if k not in volatile}
@@ -172,21 +173,21 @@ def test_priority_pagination_and_bidirectional_patrol(client):
 
 
 def test_database_constraints_and_geodesic_edges(client):
-    assert distance({'lat': 0, 'lng': 179.99999}, {'lat': 0, 'lng': -179.99999}) < 3
+    assert GeoMath.distance({'lat': 0, 'lng': 179.99999}, {'lat': 0, 'lng': -179.99999}) < 3
     with pytest.raises(IntegrityError):
         with client.app.state.engine.begin() as conn:
             conn.execute(s.potholes.insert().values(lat=95, lng=0, kind='BACHE', status='UNVERIFIED'))
     with pytest.raises(IntegrityError):
         with client.app.state.engine.begin() as conn:
-            conn.execute(s.reports.insert().values(pothole_id=s.uid(), session_id=s.uid(), accuracy=1, description='FK inexistente'))
+            conn.execute(s.reports.insert().values(pothole_id=s.Ids.new(), session_id=s.Ids.new(), accuracy=1, description='FK inexistente'))
 
 
 def test_import_preserves_id_timestamp_address_and_is_idempotent(client, tmp_path):
     token(client)
     import sqlite3
     import json
-    from scripts.import_sqlite import import_records
-    report_id = s.uid()
+    from scripts.import_sqlite import SQLiteImporter
+    report_id = s.Ids.new()
     original = {
         'id': report_id, 'timestamp': 1700000000000, 'isPothole': True, 'potholeType': 'BACHE',
         'hazardScore': 62, 'aiDescription': 'Reporte histórico', 'riskFactors': ['Bordes rotos'],
@@ -197,8 +198,8 @@ def test_import_preserves_id_timestamp_address_and_is_idempotent(client, tmp_pat
     with sqlite3.connect(source) as conn:
         conn.execute('CREATE TABLE reports (created_at INTEGER, data TEXT)')
         conn.execute('INSERT INTO reports VALUES (?, ?)', (original['timestamp'], json.dumps(original)))
-    assert import_records(client.app.state.engine, source) == 1
-    assert import_records(client.app.state.engine, source) == 0
+    assert SQLiteImporter(client.app.state.engine).run(source) == 1
+    assert SQLiteImporter(client.app.state.engine).run(source) == 0
     report = client.get('/api/reports').json()['reports'][0]
     assert report['id'] == report_id and report['timestamp'] == original['timestamp']
     assert report['zone']['city'] == original['zone']['city']

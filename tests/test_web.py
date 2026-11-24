@@ -1,7 +1,7 @@
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app.web import mount_frontend
+from app.web import StaticFrontend
 
 
 def test_frontend_and_api_share_origin_without_intercepting_api(tmp_path):
@@ -12,7 +12,7 @@ def test_frontend_and_api_share_origin_without_intercepting_api(tmp_path):
     app = FastAPI()
     @app.get('/api/health')
     def health(): return {'status': 'ok'}
-    mount_frontend(app, str(tmp_path))
+    StaticFrontend.mount(app, str(tmp_path))
     with TestClient(app) as client:
         root = client.get('/')
         assert root.status_code == 200 and 'BacheScan AI' in root.text
@@ -30,6 +30,6 @@ def test_frontend_and_api_share_origin_without_intercepting_api(tmp_path):
 
 def test_frontend_mount_requires_compiled_entry_and_is_disabled_by_default(tmp_path):
     app = FastAPI()
-    mount_frontend(app, '')
+    StaticFrontend.mount(app, '')
     with TestClient(app) as client: assert client.get('/').status_code == 404
-    with pytest.raises(RuntimeError): mount_frontend(FastAPI(), str(tmp_path))
+    with pytest.raises(RuntimeError): StaticFrontend.mount(FastAPI(), str(tmp_path))

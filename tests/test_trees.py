@@ -1,7 +1,7 @@
 import random
 import pytest
 from app.trees import BinarySearchTree, TreeNode
-from app.report_trees import ReportRiskIndex, ReportPlaceTree, report_key, place_key, place_id
+from app.report_trees import PlaceKeys, ReportPlaceTree, ReportRiskIndex
 from tree_helpers import report
 
 def example():
@@ -296,17 +296,17 @@ def test_binary_snapshot_excludes_private_fields():
 
 def test_invalid_scores():
     for value in [True, float('nan'), float('inf'), -1, 101]:
-        with pytest.raises(ValueError): report_key(report(score=value))
+        with pytest.raises(ValueError): ReportRiskIndex.key_of(report(score=value))
 
 
 def test_invalid_timestamps():
     for value in [-1, float('inf'), True]:
-        with pytest.raises(ValueError): report_key(report(timestamp=value))
+        with pytest.raises(ValueError): ReportRiskIndex.key_of(report(timestamp=value))
 
 
 def test_invalid_report_ids():
     for value in ['',None,12]:
-        with pytest.raises(ValueError): report_key(report(identity=value))
+        with pytest.raises(ValueError): ReportRiskIndex.key_of(report(identity=value))
 
 
 def test_invalid_report_range():
@@ -344,8 +344,8 @@ def test_unknown_and_real_fallback_label_are_distinct():
 
 
 def test_place_ids_escape_path_boundaries():
-    assert place_id(['a:b','c']) != place_id(['a','b:c'])
-    assert place_key('  BOGOTÁ   Norte ') == 'bogota norte'
+    assert PlaceKeys.identity(['a:b','c']) != PlaceKeys.identity(['a','b:c'])
+    assert PlaceKeys.normalize('  BOGOTÁ   Norte ') == 'bogota norte'
 
 
 def test_places_duplicate_id():

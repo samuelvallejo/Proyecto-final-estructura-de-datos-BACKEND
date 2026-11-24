@@ -16,7 +16,7 @@ class Geocoder:
         key = f'{position.lat:.4f},{position.lng:.4f}'
         with self.engine.connect() as conn:
             cached = conn.execute(select(s.geocode_cache).where(
-                s.geocode_cache.c.cache_key == key, s.geocode_cache.c.expires_at > s.now())).mappings().first()
+                s.geocode_cache.c.cache_key == key, s.geocode_cache.c.expires_at > s.Clock.now())).mappings().first()
         if cached:
             return cached['payload']
         empty = {'street': None, 'neighborhood': None, 'city': None, 'fullAddress': None,
@@ -45,7 +45,7 @@ class Geocoder:
             except (httpx.HTTPError, ValueError, TypeError):
                 payload, ttl = empty, 60_000
             with self.engine.begin() as conn:
-                stmt = insert(s.geocode_cache).values(cache_key=key, payload=payload, expires_at=s.now() + ttl)
+                stmt = insert(s.geocode_cache).values(cache_key=key, payload=payload, expires_at=s.Clock.now() + ttl)
                 conn.execute(stmt.on_conflict_do_update(index_elements=['cache_key'], set_={
-                    'payload': payload, 'expires_at': s.now() + ttl}))
+                    'payload': payload, 'expires_at': s.Clock.now() + ttl}))
             return payload

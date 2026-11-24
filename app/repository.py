@@ -1,3 +1,4 @@
+"""Data access for scans, reports and passes. PostgreSQL is the source of truth."""
 import hashlib
 import math
 import secrets
@@ -5,106 +6,100 @@ from sqlalchemy import select, func, text, update
 from sqlalchemy.dialects.postgresql import insert
 from fastapi import HTTPException
 from . import schema as s
+from .geo import GeoMath
+from .structures import DynamicArray, HashSet, SinglyLinkedList, Sorter
 
 
-def distance(a, b):
-    lat1, lat2 = math.radians(a['lat']), math.radians(b['lat'])
-    delta = math.radians(b['lng'] - a['lng'])
-    h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta / 2) ** 2
-    return 12742000 * math.asin(min(1, math.sqrt(h)))
+class PotholeStatus:
+    INACTIVE = ['REPAIRED', 'REJECTED']
+    ALL = ['UNVERIFIED', 'CONFIRMED', 'IN_PROGRESS', 'REPAIRED', 'REJECTED']
 
 
-PASS_DEDUPE_MS = 10 * 60_000
-INACTIVE_STATUSES = ['REPAIRED', 'REJECTED']
+class PassTracker:
+    """Records that a person passed near a known pothole and aggregates how many people did."""
+    DEDUPE_MS = 10 * 60_000
+    MAX_PER_CALL = 20
 
+    @staticmethod
+    def nearby(conn, position, radius):
+        """Active potholes within ``radius`` meters, closest first (indexed lat/lng pre-filter)."""
+        lat_span = GeoMath.latitude_span(radius)
+        lng_span = GeoMath.longitude_span(radius, position['lat'])
+        rows = conn.execute(select(s.potholes.c.id, s.potholes.c.lat, s.potholes.c.lng).where(
+            s.potholes.c.lat.between(position['lat'] - lat_span, position['lat'] + lat_span),
+            s.potholes.c.lng.between(position['lng'] - lng_span, position['lng'] + lng_span),
+            s.potholes.c.status.not_in(PotholeStatus.INACTIVE))).mappings().all()
+        hits = SinglyLinkedList[tuple]()
+        for row in rows:
+            meters = GeoMath.distance(row, position)
+            if meters <= radius:
+                hits.append((row['id'], meters))
+        return list(Sorter.merge_sort(hits, key=lambda hit: hit[1]))
 
-def nearby_potholes(conn, position, radius):
-    """Baches activos a menos de `radius` metros; prefiltro indexado por latitud y longitud."""
-    lat_span = radius / 110000
-    lng_span = radius / (111320 * max(.01, math.cos(math.radians(position['lat']))))
-    rows = conn.execute(select(s.potholes.c.id, s.potholes.c.lat, s.potholes.c.lng).where(
-        s.potholes.c.lat.between(position['lat'] - lat_span, position['lat'] + lat_span),
-        s.potholes.c.lng.between(position['lng'] - lng_span, position['lng'] + lng_span),
-        s.potholes.c.status.not_in(INACTIVE_STATUSES))).mappings().all()
-    hits = [(row['id'], distance(row, position)) for row in rows]
-    return sorted(((identity, meters) for identity, meters in hits if meters <= radius), key=lambda hit: hit[1])
+    @staticmethod
+    def record(conn, user_id, session_id, hits, source, trip_id=None):
+        """Store one pass per pothole; the same person counts once every 10 minutes."""
+        candidates = DynamicArray[tuple]()
+        for hit in hits:
+            if candidates.size == PassTracker.MAX_PER_CALL:
+                break
+            candidates.append(hit)
+        if not candidates.size:
+            return []
+        recent = HashSet(conn.execute(select(s.pothole_passes.c.pothole_id).where(
+            s.pothole_passes.c.user_id == user_id,
+            s.pothole_passes.c.pothole_id.in_([identity for identity, _ in candidates]),
+            s.pothole_passes.c.created_at > s.Clock.now() - PassTracker.DEDUPE_MS)).scalars())
+        saved = SinglyLinkedList[str]()
+        for identity, meters in candidates:
+            if identity in recent:
+                continue
+            conn.execute(s.pothole_passes.insert().values(pothole_id=identity, user_id=user_id, session_id=session_id,
+                                                          trip_id=trip_id, source=source, distance_m=round(float(meters), 1)))
+            saved.append(identity)
+        if saved:
+            conn.execute(s.audit_events.insert().values(session_id=session_id, action='pothole.pass',
+                entity_id=saved.head.value, details={'source': source, 'potholes': saved.size, 'tripId': trip_id}))
+        return list(saved)
 
+    @staticmethod
+    def stats(conn, pothole_ids):
+        """``{pothole_id: {passCount, peopleCount, lastPassAt}}`` for the given potholes."""
+        ids = [identity for identity in HashSet(pothole_ids) if identity]
+        if not ids:
+            return {}
+        rows = conn.execute(select(s.pothole_passes.c.pothole_id, func.count().label('passes'),
+                                   func.count(func.distinct(s.pothole_passes.c.user_id)).label('people'),
+                                   func.max(s.pothole_passes.c.created_at).label('last'))
+                            .where(s.pothole_passes.c.pothole_id.in_(ids))
+                            .group_by(s.pothole_passes.c.pothole_id)).mappings().all()
+        return {row['pothole_id']: {'passCount': row['passes'], 'peopleCount': row['people'], 'lastPassAt': row['last']}
+                for row in rows}
 
-def record_passes(conn, user_id, session_id, hits, source, trip_id=None):
-    """Guarda que la persona pasó por cada bache; un mismo paso cuenta una vez cada 10 minutos."""
-    hits = list(hits)[:20]
-    if not hits:
-        return []
-    recent = set(conn.execute(select(s.pothole_passes.c.pothole_id).where(
-        s.pothole_passes.c.user_id == user_id,
-        s.pothole_passes.c.pothole_id.in_([identity for identity, _ in hits]),
-        s.pothole_passes.c.created_at > s.now() - PASS_DEDUPE_MS)).scalars())
-    saved = []
-    for identity, meters in hits:
-        if identity in recent:
-            continue
-        conn.execute(s.pothole_passes.insert().values(pothole_id=identity, user_id=user_id, session_id=session_id,
-                                                      trip_id=trip_id, source=source, distance_m=round(float(meters), 1)))
-        saved.append(identity)
-    if saved:
-        conn.execute(s.audit_events.insert().values(session_id=session_id, action='pothole.pass',
-            entity_id=saved[0], details={'source': source, 'potholes': len(saved), 'tripId': trip_id}))
-    return saved
-
-
-def pass_stats(conn, pothole_ids):
-    ids = [identity for identity in set(pothole_ids) if identity]
-    if not ids:
-        return {}
-    rows = conn.execute(select(s.pothole_passes.c.pothole_id, func.count().label('passes'),
-                               func.count(func.distinct(s.pothole_passes.c.user_id)).label('people'),
-                               func.max(s.pothole_passes.c.created_at).label('last'))
-                        .where(s.pothole_passes.c.pothole_id.in_(ids))
-                        .group_by(s.pothole_passes.c.pothole_id)).mappings().all()
-    return {row['pothole_id']: {'passCount': row['passes'], 'peopleCount': row['people'], 'lastPassAt': row['last']}
-            for row in rows}
-
-
-def user_for_session(conn, session_id):
-    return conn.execute(select(s.devices.c.user_id).select_from(s.sessions.join(s.devices))
-                        .where(s.sessions.c.id == session_id)).scalar_one_or_none()
-
-
-def upsert(conn, relation, values, keys):
-    stmt = insert(relation).values(**values).on_conflict_do_nothing(index_elements=keys).returning(relation.c.id)
-    value = conn.execute(stmt).scalar_one_or_none()
-    return value or conn.execute(select(relation.c.id).where(*(relation.c[key] == values[key] for key in keys))).scalar_one()
+    @staticmethod
+    def user_for_session(conn, session_id):
+        return conn.execute(select(s.devices.c.user_id).select_from(s.sessions.join(s.devices))
+                            .where(s.sessions.c.id == session_id)).scalar_one_or_none()
 
 
 class Repository:
+    """Scans, reports and community reports stored in PostgreSQL."""
+
     def __init__(self, engine, settings):
         self.engine, self.settings = engine, settings
 
-    def new_session(self):
-        token = secrets.token_urlsafe(32)
-        with self.engine.begin() as conn:
-            device = conn.execute(s.devices.insert().values(platform='mobile-pwa').returning(s.devices.c.id)).scalar_one()
-            session = conn.execute(s.sessions.insert().values(device_id=device,
-                token_hash=hashlib.sha256(token.encode()).hexdigest(), expires_at=s.now() + self.settings.session_hours * 3600_000)
-                .returning(s.sessions.c.id)).scalar_one()
-        return {'token': token, 'sessionId': session, 'expiresAt': s.now() + self.settings.session_hours * 3600_000}
-
-    def session(self, token):
-        if not token:
-            raise HTTPException(401, 'Inicia una sesión de escaneo.')
-        with self.engine.connect() as conn:
-            row = conn.execute(select(s.sessions).where(
-                s.sessions.c.token_hash == hashlib.sha256(token.encode()).hexdigest(),
-                s.sessions.c.expires_at > s.now())).mappings().first()
-        if not row:
-            raise HTTPException(401, 'La sesión ha expirado. Inicia el escaneo de nuevo.')
-        return row['id']
+    @staticmethod
+    def _upsert(conn, relation, values, keys):
+        """Insert ``values`` unless a row with the same ``keys`` exists; return the row id."""
+        stmt = insert(relation).values(**values).on_conflict_do_nothing(index_elements=keys).returning(relation.c.id)
+        value = conn.execute(stmt).scalar_one_or_none()
+        return value or conn.execute(select(relation.c.id).where(*(relation.c[key] == values[key] for key in keys))).scalar_one()
 
     def reserve_usage(self, session_id):
         with self.engine.begin() as conn:
-            # Global, persistente y válido incluso con múltiples procesos.
+            # Global and persistent limit, valid across several processes.
             conn.execute(text('SELECT pg_advisory_xact_lock(771011)'))
-            since = s.now() - 3600_000
+            since = s.Clock.now() - 3600_000
             total = conn.execute(select(func.count()).select_from(s.api_usage).where(s.api_usage.c.created_at > since)).scalar_one()
             count, last = conn.execute(select(func.count(), func.max(s.api_usage.c.created_at)).where(
                 s.api_usage.c.created_at > since, s.api_usage.c.session_id == session_id)).one()
@@ -114,7 +109,7 @@ class Repository:
             interval = self.settings.local_scan_interval_seconds if local else self.settings.scan_interval_seconds
             if total >= maximum_global or count >= maximum_session:
                 raise HTTPException(429, 'Se alcanzó el límite de escaneos por hora.', headers={'Retry-After': '60'})
-            if last and s.now() - last < interval * 1000:
+            if last and s.Clock.now() - last < interval * 1000:
                 raise HTTPException(429, 'Espera unos segundos antes del próximo análisis.', headers={'Retry-After': '5'})
             return conn.execute(s.api_usage.insert().values(session_id=session_id, status='pending', provider='pending')
                                 .returning(s.api_usage.c.id)).scalar_one()
@@ -127,16 +122,16 @@ class Repository:
     def zone(self, conn, zone):
         city_id = neighborhood_id = road_id = None
         if zone.get('countryCode') and zone.get('city'):
-            country_id = upsert(conn, s.countries, {'code': zone['countryCode'].upper()[:3], 'name': zone.get('country') or zone['countryCode']}, ['code'])
-            region_id = upsert(conn, s.regions, {'country_id': country_id, 'name': zone.get('region') or 'Sin región identificada'}, ['country_id', 'name'])
-            city_id = upsert(conn, s.cities, {'region_id': region_id, 'name': zone['city']}, ['region_id', 'name'])
+            country_id = self._upsert(conn, s.countries, {'code': zone['countryCode'].upper()[:3], 'name': zone.get('country') or zone['countryCode']}, ['code'])
+            region_id = self._upsert(conn, s.regions, {'country_id': country_id, 'name': zone.get('region') or 'Sin región identificada'}, ['country_id', 'name'])
+            city_id = self._upsert(conn, s.cities, {'region_id': region_id, 'name': zone['city']}, ['region_id', 'name'])
             if zone.get('neighborhood'):
-                neighborhood_id = upsert(conn, s.neighborhoods, {'city_id': city_id, 'name': zone['neighborhood']}, ['city_id', 'name'])
+                neighborhood_id = self._upsert(conn, s.neighborhoods, {'city_id': city_id, 'name': zone['neighborhood']}, ['city_id', 'name'])
             if zone.get('street'):
-                road_id = upsert(conn, s.roads, {'city_id': city_id, 'name': zone['street']}, ['city_id', 'name'])
+                road_id = self._upsert(conn, s.roads, {'city_id': city_id, 'name': zone['street']}, ['city_id', 'name'])
         values = {'city_id': city_id, 'neighborhood_id': neighborhood_id, 'road_id': road_id,
                   'cache_key': zone['cacheKey'], 'address': zone.get('fullAddress') or '',
-                  'source': zone['source'], 'resolved_at': s.now()}
+                  'source': zone['source'], 'resolved_at': s.Clock.now()}
         stmt = insert(s.zones).values(**values).on_conflict_do_update(index_elements=['cache_key'], set_={k: v for k, v in values.items() if k != 'cache_key'})
         return conn.execute(stmt.returning(s.zones.c.id)).scalar_one()
 
@@ -152,7 +147,7 @@ class Repository:
                 .returning(s.frames.c.id)).scalar_one()
             if position:
                 conn.execute(s.gps_samples.insert().values(frame_id=frame_id, **position.model_dump()))
-            model_id = upsert(conn, s.ai_models, {'provider': provider, 'name': model}, ['provider', 'name'])
+            model_id = self._upsert(conn, s.ai_models, {'provider': provider, 'name': model}, ['provider', 'name'])
             analysis_id = conn.execute(s.analyses.insert().values(frame_id=frame_id, model_id=model_id,
                 result=result, duration_ms=duration, fallback=fallback).returning(s.analyses.c.id)).scalar_one()
             report_id = None
@@ -163,25 +158,25 @@ class Repository:
                     confidence=analysis.confidence).returning(s.detections.c.id)).scalar_one()
                 if position:
                     radius = max(15, min(position.accuracy, 35))
-                    # Búsqueda indexada por latitud + Haversine, válida en polos y antimeridiano.
-                    # Sin ventana de tiempo: el mismo hueco detectado otro día suma un paso, no un duplicado.
+                    # Latitude-indexed lookup plus Haversine; correct at the poles and across the antimeridian.
+                    # No time window: seeing the same hole on another day adds a pass, not a duplicate.
                     candidate_query = select(s.potholes).where(
                         s.potholes.c.kind == analysis.potholeType,
                         s.potholes.c.lat.between(position.lat - radius / 110000, position.lat + radius / 110000),
-                        s.potholes.c.status.not_in(INACTIVE_STATUSES))
+                        s.potholes.c.status.not_in(PotholeStatus.INACTIVE))
                     if excluded_reports:
                         candidate_query = candidate_query.where(s.potholes.c.id.not_in(
                             select(s.reports.c.pothole_id).where(s.reports.c.id.in_(excluded_reports))))
                     candidates = conn.execute(candidate_query).mappings().all()
-                    match = next((row for row in candidates if distance(row, position.model_dump()) <= radius), None)
+                    match = next((row for row in candidates if GeoMath.distance(row, position.model_dump()) <= radius), None)
                     if match:
                         report_id = conn.execute(select(s.reports.c.id).where(s.reports.c.pothole_id == match['id'])
                                                  .order_by(s.reports.c.created_at.desc()).limit(1)).scalar_one()
                         existing = True
-                        user_id = user_for_session(conn, session_id)
+                        user_id = PassTracker.user_for_session(conn, session_id)
                         if user_id:
-                            record_passes(conn, user_id, session_id,
-                                          [(match['id'], distance(match, position.model_dump()))], 'scan')
+                            PassTracker.record(conn, user_id, session_id,
+                                          [(match['id'], GeoMath.distance(match, position.model_dump()))], 'scan')
                     else:
                         zone_id = self.zone(conn, zone)
                         pothole_id = conn.execute(s.potholes.insert().values(zone_id=zone_id, lat=position.lat,
@@ -193,7 +188,7 @@ class Repository:
                             score=analysis.hazardScore, level=result['hazardLevel'], method='visual-' + provider)
                             .returning(s.risk_assessments.c.id)).scalar_one()
                         for factor in analysis.riskFactors:
-                            factor_id = upsert(conn, s.risk_factors, {'label': factor}, ['label'])
+                            factor_id = self._upsert(conn, s.risk_factors, {'label': factor}, ['label'])
                             conn.execute(s.assessment_factors.insert().values(assessment_id=assessment, factor_id=factor_id))
                         conn.execute(s.status_events.insert().values(pothole_id=pothole_id, old_status='NEW',
                             new_status='UNVERIFIED', reason='Detección automática pendiente de inspección'))
@@ -230,7 +225,7 @@ class Repository:
 
     def with_stats(self, conn, rows):
         reports = [self.serialize(row) for row in rows]
-        stats = pass_stats(conn, [report['potholeId'] for report in reports])
+        stats = PassTracker.stats(conn, [report['potholeId'] for report in reports])
         for report in reports:
             report.update(stats.get(report['potholeId'], {}))
         return reports
@@ -242,7 +237,7 @@ class Repository:
 
     def list_reports(self, limit=100, offset=0, priority=False, position=None, radius=5000, statuses=None):
         query = self.query().where(s.potholes.c.status.in_(statuses) if statuses
-                                   else s.potholes.c.status.not_in(INACTIVE_STATUSES))
+                                   else s.potholes.c.status.not_in(PotholeStatus.INACTIVE))
         if position:
             query = query.where(s.potholes.c.lat.between(position['lat'] - radius / 110000, position['lat'] + radius / 110000))
         if priority:
@@ -271,19 +266,19 @@ class Repository:
             recent = conn.execute(select(func.count()).select_from(s.reports.join(s.sessions).join(s.devices)
                 .join(s.risk_assessments, s.risk_assessments.c.report_id == s.reports.c.id))
                 .where(s.devices.c.user_id == session['user_id'], s.risk_assessments.c.method == 'community',
-                       s.reports.c.created_at > s.now() - 600000)).scalar_one()
+                       s.reports.c.created_at > s.Clock.now() - 600000)).scalar_one()
             if recent >= 10:
                 raise HTTPException(429, 'Espera unos minutos antes de publicar otro aviso.')
             candidates = conn.execute(select(s.potholes).where(
                 s.potholes.c.lat.between(position.lat - 20 / 110000, position.lat + 20 / 110000),
                 s.potholes.c.status.not_in(['REPAIRED', 'REJECTED']))).mappings()
-            match = next((row for row in candidates if distance(row, position.model_dump()) <= 20), None)
+            match = next((row for row in candidates if GeoMath.distance(row, position.model_dump()) <= 20), None)
             if match:
                 report_id = conn.execute(select(s.reports.c.id).where(s.reports.c.pothole_id == match['id'])
                     .order_by(s.reports.c.created_at.desc(), s.reports.c.id).limit(1)).scalar_one()
                 existing = True
-                record_passes(conn, session['user_id'], session['id'],
-                              [(match['id'], distance(match, position.model_dump()))], 'community')
+                PassTracker.record(conn, session['user_id'], session['id'],
+                              [(match['id'], GeoMath.distance(match, position.model_dump()))], 'community')
             else:
                 zone_id = self.zone(conn, zone)
                 pothole_id = conn.execute(s.potholes.insert().values(zone_id=zone_id, lat=position.lat,

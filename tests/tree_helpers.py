@@ -15,7 +15,7 @@ def seed_reports(client, scores):
         session = conn.execute(select(s.sessions.c.id)).scalar_one()
         holes, reports, assessments = [], [], []
         for i, score in enumerate(scores):
-            hole_id, report_id = s.uid(), s.uid(); identities.append(report_id)
+            hole_id, report_id = s.Ids.new(), s.Ids.new(); identities.append(report_id)
             holes.append(dict(id=hole_id, lat=3.45 + i*.001, lng=-76.53, kind='BACHE', status='UNVERIFIED'))
             reports.append(dict(id=report_id, pothole_id=hole_id, session_id=session, accuracy=8, description='Prueba de árboles'))
             assessments.append(dict(pothole_id=hole_id, report_id=report_id, score=score,

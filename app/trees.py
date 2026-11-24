@@ -1,21 +1,27 @@
-"""Adaptación de Node/BinaryTree de Arboles.pdf (Mideros, 2026).
+"""Binary search tree adapted from the Node/BinaryTree examples of the course notes (Arboles.pdf).
 
-Los enlaces left/right son nodos reales. No es un AVL: las instantáneas
-se construyen equilibradas y las operaciones posteriores siguen siendo BST.
+Left/right links are real nodes. It is not self-balancing (not an AVL): snapshots are built
+balanced from sorted data and later operations follow plain BST rules. Every traversal uses the
+hand-written Stack and Queue from ``structures`` instead of Python lists.
 """
-from dataclasses import dataclass
-from typing import Generic, Iterator, TypeVar
-from .structures import Queue
+from __future__ import annotations
+
+from typing import Generic, Iterable, Iterator, TypeVar
+
+from .structures import DynamicArray, HashSet, Queue, SinglyLinkedList, Sorter, Stack
 
 K = TypeVar('K')
 V = TypeVar('V')
 
-@dataclass
+
 class TreeNode(Generic[K, V]):
-    key: K
-    value: V
-    left: 'TreeNode[K, V] | None' = None
-    right: 'TreeNode[K, V] | None' = None
+    __slots__ = ('key', 'value', 'left', 'right')
+
+    def __init__(self, key: K, value: V, left: TreeNode[K, V] | None = None, right: TreeNode[K, V] | None = None):
+        self.key = key
+        self.value = value
+        self.left = left
+        self.right = right
 
 
 class BinarySearchTree(Generic[K, V]):
@@ -24,6 +30,7 @@ class BinarySearchTree(Generic[K, V]):
         self.size = 0
 
     def insert(self, key: K, value: V) -> bool:
+        """Insert ``key``; an existing key only updates its value and returns False."""
         if self.root is None:
             self.root = TreeNode(key, value)
             self.size = 1
@@ -33,13 +40,18 @@ class BinarySearchTree(Generic[K, V]):
             if key == current.key:
                 current.value = value
                 return False
-            side = 'left' if key < current.key else 'right'
-            child = getattr(current, side)
-            if child is None:
-                setattr(current, side, TreeNode(key, value))
-                self.size += 1
-                return True
-            current = child
+            if key < current.key:
+                if current.left is None:
+                    current.left = TreeNode(key, value)
+                    self.size += 1
+                    return True
+                current = current.left
+            else:
+                if current.right is None:
+                    current.right = TreeNode(key, value)
+                    self.size += 1
+                    return True
+                current = current.right
 
     def find_node(self, key: K) -> TreeNode[K, V] | None:
         current = self.root
@@ -57,55 +69,59 @@ class BinarySearchTree(Generic[K, V]):
         return self.find_node(key) is not None
 
     def in_order(self) -> Iterator[TreeNode[K, V]]:
-        pending = []
+        pending = Stack[TreeNode[K, V]]()
         current = self.root
-        while current is not None or pending:
+        while current is not None or not pending.is_empty():
             while current is not None:
-                pending.append(current)
+                pending.push(current)
                 current = current.left
             current = pending.pop()
             yield current
             current = current.right
 
     def reverse_order(self) -> Iterator[TreeNode[K, V]]:
-        pending = []
+        pending = Stack[TreeNode[K, V]]()
         current = self.root
-        while current is not None or pending:
+        while current is not None or not pending.is_empty():
             while current is not None:
-                pending.append(current)
+                pending.push(current)
                 current = current.right
             current = pending.pop()
             yield current
             current = current.left
 
     def pre_order(self) -> Iterator[TreeNode[K, V]]:
-        pending = [self.root] if self.root else []
-        while pending:
+        pending = Stack[TreeNode[K, V]]()
+        if self.root is not None:
+            pending.push(self.root)
+        while not pending.is_empty():
             node = pending.pop()
             yield node
             if node.right is not None:
-                pending.append(node.right)
+                pending.push(node.right)
             if node.left is not None:
-                pending.append(node.left)
+                pending.push(node.left)
 
     def post_order(self) -> Iterator[TreeNode[K, V]]:
-        pending = [(self.root, False)] if self.root else []
-        while pending:
+        pending = Stack[tuple]()
+        if self.root is not None:
+            pending.push((self.root, False))
+        while not pending.is_empty():
             node, visited = pending.pop()
             if visited:
                 yield node
                 continue
-            pending.append((node, True))
+            pending.push((node, True))
             if node.right is not None:
-                pending.append((node.right, False))
+                pending.push((node.right, False))
             if node.left is not None:
-                pending.append((node.left, False))
+                pending.push((node.left, False))
 
     def level_order(self) -> Iterator[tuple[TreeNode[K, V], int, TreeNode[K, V] | None]]:
-        pending = Queue()
+        pending = Queue[tuple]()
         if self.root is not None:
             pending.enqueue((self.root, 1, None))
-        while pending.size:
+        while not pending.is_empty():
             node, level, parent = pending.dequeue()
             yield node, level, parent
             if node.left is not None:
@@ -113,14 +129,18 @@ class BinarySearchTree(Generic[K, V]):
             if node.right is not None:
                 pending.enqueue((node.right, level + 1, node))
 
-    def traverse(self, order='inorder') -> Iterator[TreeNode[K, V]]:
-        methods = {'inorder': self.in_order, 'descending': self.reverse_order,
-                   'preorder': self.pre_order, 'postorder': self.post_order}
+    def traverse(self, order: str = 'inorder') -> Iterator[TreeNode[K, V]]:
         if order == 'level':
             return (node for node, _, _ in self.level_order())
-        if order not in methods:
-            raise ValueError('Recorrido inválido')
-        return methods[order]()
+        if order == 'inorder':
+            return self.in_order()
+        if order == 'descending':
+            return self.reverse_order()
+        if order == 'preorder':
+            return self.pre_order()
+        if order == 'postorder':
+            return self.post_order()
+        raise ValueError('Invalid traversal')
 
     @property
     def height(self) -> int:
@@ -137,29 +157,31 @@ class BinarySearchTree(Generic[K, V]):
                 'leaves': leaves, 'branches': branches, 'internalNodes': self.size - leaves,
                 'order': 2, 'maxDegree': maximum_degree}
 
-    def trace(self, key: K) -> list[TreeNode[K, V]]:
-        result = []
+    def trace(self, key: K) -> SinglyLinkedList[TreeNode[K, V]]:
+        """Nodes visited while searching ``key``, from the root down."""
+        path = SinglyLinkedList[TreeNode[K, V]]()
         current = self.root
         while current is not None:
-            result.append(current)
+            path.append(current)
             if key == current.key:
                 break
             current = current.left if key < current.key else current.right
-        return result
+        return path
 
     def between(self, lower: K, upper: K) -> Iterator[TreeNode[K, V]]:
+        """In-order nodes with ``lower <= key <= upper``, pruning subtrees outside the range."""
         if upper < lower:
-            raise ValueError('Rango inválido')
-        pending = []
+            raise ValueError('Invalid range')
+        pending = Stack[TreeNode[K, V]]()
         current = self.root
-        while current is not None or pending:
+        while current is not None or not pending.is_empty():
             while current is not None:
                 if current.key < lower:
                     current = current.right
                 else:
-                    pending.append(current)
+                    pending.push(current)
                     current = current.left
-            if not pending:
+            if pending.is_empty():
                 break
             current = pending.pop()
             if current.key > upper:
@@ -176,6 +198,7 @@ class BinarySearchTree(Generic[K, V]):
         if current is None:
             return False
         if current.left is not None and current.right is not None:
+            # Two children: copy the in-order successor and delete it instead.
             successor_parent, successor = current, current.right
             while successor.left is not None:
                 successor_parent, successor = successor, successor.left
@@ -192,53 +215,61 @@ class BinarySearchTree(Generic[K, V]):
         return True
 
     @classmethod
-    def from_items(cls, items):
-        # Igual que la agenda del PDF: una clave repetida actualiza el valor.
-        pairs = sorted(items, key=lambda pair: pair[0])
-        unique = []
-        for pair in pairs:
-            if unique and unique[-1][0] == pair[0]:
-                unique[-1] = pair
+    def from_items(cls, items: Iterable[tuple[K, V]]) -> BinarySearchTree[K, V]:
+        """Build a balanced tree: sort, keep the last value of repeated keys, split at the middle."""
+        unique = DynamicArray[tuple]()
+        for pair in Sorter.merge_sort(items, key=lambda pair: pair[0]):
+            if unique.size and unique[-1][0] == pair[0]:
+                unique[-1] = pair  # Like the course's phone book: a repeated key updates the value.
             else:
                 unique.append(pair)
         tree = cls()
-        tasks = [(0, len(unique), None, 'root')]
-        while tasks:
+        tasks = Stack[tuple]()
+        tasks.push((0, unique.size, None, 'root'))
+        while not tasks.is_empty():
             first, last, parent, side = tasks.pop()
             if first >= last:
                 continue
             middle = (first + last) // 2
             node = TreeNode(*unique[middle])
-            setattr(parent if parent is not None else tree, side, node)
+            if parent is None:
+                tree.root = node
+            elif side == 'left':
+                parent.left = node
+            else:
+                parent.right = node
             tree.size += 1
-            tasks.append((middle + 1, last, node, 'right'))
-            tasks.append((first, middle, node, 'left'))
+            tasks.push((middle + 1, last, node, 'right'))
+            tasks.push((first, middle, node, 'left'))
         return tree
 
-    def rebalance(self):
+    def rebalance(self) -> None:
         rebuilt = self.from_items((node.key, node.value) for node in self.in_order())
         self.root, self.size = rebuilt.root, rebuilt.size
 
     def validate(self) -> bool:
-        seen = set()
-        pending = [(self.root, None, None)] if self.root else []
-        while pending:
+        """Check BST ordering, absence of cycles and that ``size`` matches the real node count."""
+        seen = HashSet[int]()
+        pending = Stack[tuple]()
+        if self.root is not None:
+            pending.push((self.root, None, None))
+        while not pending.is_empty():
             node, lower, upper = pending.pop()
             if id(node) in seen or (lower is not None and node.key <= lower) or (upper is not None and node.key >= upper):
                 return False
             seen.add(id(node))
             if node.right is not None:
-                pending.append((node.right, node.key, upper))
+                pending.push((node.right, node.key, upper))
             if node.left is not None:
-                pending.append((node.left, lower, node.key))
+                pending.push((node.left, lower, node.key))
         return len(seen) == self.size
 
-    def clear(self):
+    def clear(self) -> None:
         self.root = None
         self.size = 0
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.size
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self.root is not None

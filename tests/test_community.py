@@ -6,7 +6,7 @@ from test_postgres_api import client, token
 
 
 def payload(lat=3.45, lng=-76.53, **changes):
-    return {'position': {'lat': lat, 'lng': lng, 'accuracy': 8}, 'capturedAt': s.now(),
+    return {'position': {'lat': lat, 'lng': lng, 'accuracy': 8}, 'capturedAt': s.Clock.now(),
             'risk': 'HIGH', 'description': 'Hueco peligroso junto al cruce del carril derecho.', **changes}
 
 
@@ -40,7 +40,7 @@ def test_community_validation_csrf_and_precision(client):
                     dict(position={'lat': 91, 'lng': 1, 'accuracy': 10}), dict(internal='sensitive-value')]:
         response = client.post('/api/community/reports', json=payload(**changes))
         assert response.status_code == 422 and 'sensitive-value' not in response.text
-    for timestamp in [s.now() - 31000, s.now() + 10000]:
+    for timestamp in [s.Clock.now() - 31000, s.Clock.now() + 10000]:
         assert client.post('/api/community/reports', json=payload(capturedAt=timestamp)).status_code == 400
     assert client.post('/api/community/reports', content='x' * 9000,
                        headers={'Content-Type': 'application/json'}).status_code == 413

@@ -1,4 +1,4 @@
-"""Modelo relacional PostgreSQL. Todas las relaciones tienen FK e índices."""
+"""PostgreSQL relational model. Every relationship has a foreign key and an index."""
 import time
 import uuid
 from sqlalchemy import (
@@ -17,25 +17,37 @@ metadata = MetaData(naming_convention={
 json_type = JSON().with_variant(JSONB(), 'postgresql')
 
 
-def now():
-    return int(time.time() * 1000)
+class Clock:
+    @staticmethod
+    def now() -> int:
+        """Current time in epoch milliseconds (the unit stored in every timestamp column)."""
+        return int(time.time() * 1000)
 
 
-def uid():
-    return str(uuid.uuid4())
+class Ids:
+    @staticmethod
+    def new() -> str:
+        return str(uuid.uuid4())
 
 
-def col(name, kind=String(180), **kwargs):
-    return Column(name, kind, nullable=False, **kwargs)
+class TableFactory:
+    """Builds tables that all share a UUID primary key and a ``created_at`` timestamp."""
+
+    @staticmethod
+    def column(name, kind=String(180), **kwargs):
+        return Column(name, kind, nullable=False, **kwargs)
+
+    @staticmethod
+    def reference(name, target, nullable=False):
+        return Column(name, String(36), ForeignKey(target + '.id'), nullable=nullable)
+
+    @staticmethod
+    def table(name, *fields):
+        return Table(name, metadata, TableFactory.column('id', String(36), primary_key=True, default=Ids.new),
+                     TableFactory.column('created_at', BigInteger, default=Clock.now), *fields)
 
 
-def ref(name, target, nullable=False):
-    return Column(name, String(36), ForeignKey(target + '.id'), nullable=nullable)
-
-
-def table(name, *fields):
-    return Table(name, metadata, col('id', String(36), primary_key=True, default=uid),
-                 col('created_at', BigInteger, default=now), *fields)
+col, ref, table = TableFactory.column, TableFactory.reference, TableFactory.table
 
 
 roles = table('roles', col('name', unique=True))
@@ -87,7 +99,7 @@ api_usage = table('api_usage', ref('session_id', 'sessions'), col('status'), col
 trips = table('trips', ref('user_id', 'users'), ref('session_id', 'sessions'), col('encrypted_details', Text), Column('ended_at', BigInteger))
 trip_samples = table('trip_samples', ref('trip_id', 'trips'), col('encrypted_position', Text))
 trip_reports = table('trip_reports', ref('trip_id', 'trips'), ref('report_id', 'reports'), UniqueConstraint('trip_id', 'report_id'))
-# Paso de una persona cerca de un bache conocido; permite contar cuántas personas pasan por el mismo hueco.
+# A person passing near a known pothole; used to count how many people pass the same hole.
 pothole_passes = table('pothole_passes', ref('pothole_id', 'potholes'), ref('user_id', 'users'), ref('session_id', 'sessions'),
                        ref('trip_id', 'trips', True), col('source', String(20)), col('distance_m', Float),
                        CheckConstraint("source IN ('scan','gps','trip','community')", name='source'))

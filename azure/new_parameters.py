@@ -1,7 +1,7 @@
-"""Crear una sola vez parámetros privados de una instalación NUEVA de Azure.
+"""Create, once, the private parameters of a NEW Azure installation.
 
-No usar para reemplazar la clave de una base que ya contiene datos cifrados.
-No imprime contraseñas o claves; el archivo queda fuera del repositorio/OneDrive.
+Do not use it to replace the key of a database that already holds encrypted data.
+It never prints passwords or keys; the file stays outside the repository/OneDrive.
 """
 import argparse
 import json
