@@ -1,6 +1,6 @@
-# El frontend conserva exactamente el commit elegido de su repositorio independiente.
+# The frontend is pinned to an exact commit of its own repository.
 FROM node:24-bookworm-slim AS frontend
-ARG FRONTEND_COMMIT=ceb071fbeede6f7057fcc63132c9eb7479076888
+ARG FRONTEND_COMMIT=fc7c6e6d5fdf7b665eb0df61d903961eab2c62b1
 ADD https://github.com/samuelvallejo/proyecto-final-estructura-de-datos-FRONTEND/archive/${FRONTEND_COMMIT}.tar.gz /tmp/frontend.tar.gz
 RUN mkdir /frontend && tar -xzf /tmp/frontend.tar.gz -C /frontend --strip-components=1
 WORKDIR /frontend
@@ -21,7 +21,7 @@ COPY scripts ./scripts
 COPY alembic.ini ./alembic.ini
 COPY models/best.pt ./models/best.pt
 COPY --from=frontend /frontend/dist ./www
-# El código, pesos y frontend son de solo lectura para el proceso de la aplicación.
+# Code, weights and frontend are read-only for the application process.
 RUN useradd --create-home --uid 10001 bachescan
 USER 10001
 EXPOSE 3001
