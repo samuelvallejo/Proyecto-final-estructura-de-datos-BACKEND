@@ -38,6 +38,8 @@ La detección utiliza exclusivamente los pesos personalizados `models/best.pt` c
 | GET | `/api/operator/plan` | Plan de jornada: baches urgentes ordenados con vecino más cercano + 2-opt | operario, administrador |
 | POST | `/api/operator/reports/{id}/transition` | Cambio de estado según el flujo permitido | operario, administrador |
 | GET | `/api/operator/reports/{id}/timeline` | Historial de estados del bache | operario, administrador |
+| GET | `/api/operator/duplicates` | Grupos de reportes duplicados (rejilla espacial hash + union-find) | operario, administrador |
+| POST | `/api/operator/duplicates/merge` | Fusiona duplicados en un reporte principal | operario, administrador |
 | GET | `/api/admin/overview` | Resumen global para administración | administrador |
 | GET | `/api/admin/users` | Usuarios con rol, estado y actividad | administrador |
 | POST | `/api/admin/users/{id}/role` | Cambiar rol (Administrador, Operario, Conductor) | administrador |
@@ -127,6 +129,8 @@ Consulta [GRAFOS.md](docs/GRAFOS.md) para las fuentes académicas consultadas en
 ## Espacio del Operario
 
 El rol Operario tiene una cola de mantenimiento priorizada (montículo binario indexado), un plan de jornada que ordena los baches más urgentes para recorrerlos con menos distancia (vecino más cercano + 2-opt) y un flujo de estados validado como grafo dirigido. Consulta [OPERATOR.md](docs/OPERATOR.md).
+
+También puede revisar y fusionar baches duplicados: una rejilla espacial con tabla hash encuentra los pares cercanos y un union-find los agrupa. Consulta [DUPLICATES.md](docs/DUPLICATES.md).
 
 ## Modo administrador y cuentas demo
 
