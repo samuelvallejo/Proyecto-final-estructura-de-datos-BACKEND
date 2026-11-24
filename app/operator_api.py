@@ -14,6 +14,7 @@ from .maintenance import MaintenanceQueue, StatusWorkflow
 from .maintenance_commands import ChangeStatusCommand, CommandExecutor, MaintenanceRepository
 from .profile import AccountFormat
 from .route_planning import RoutePlannerFactory
+from .timing import measured
 from . import schema as s
 
 FIELD_ROLES = (Roles.OPERATOR, Roles.ADMIN)
@@ -93,9 +94,11 @@ class OperatorController:
         self.router.add_api_route('/reports/{report_id}/transition', self.change_status, methods=['POST'])
         self.router.add_api_route('/reports/{report_id}/timeline', self.status_timeline, methods=['GET'])
 
+    @measured()
     def work_queue(self, request: Request, limit: int = Query(20, ge=1, le=100)):
         return MaintenanceService(request).queue(limit)
 
+    @measured()
     def day_plan(self, request: Request, limit: int = Query(8, ge=1, le=25),
                  lat: float | None = Query(None, ge=-90, le=90), lng: float | None = Query(None, ge=-180, le=180),
                  algorithm: Literal['two-opt', 'nearest-neighbour', 'priority'] = 'two-opt'):

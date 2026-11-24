@@ -56,6 +56,7 @@ def test_queue_orders_by_priority_and_explains_the_score(client):
     assert first['priority']['score'] == round(sum(first['priority']['components'].values()), 2)
     assert first['allowedTransitions'] == ['CONFIRMED', 'REJECTED']
     assert data['structure']['name'] == 'indexed-binary-max-heap' and data['structure']['size'] == 3
+    assert data['tookMs'] >= 0  # Added by the measured decorator.
     assert medium['id'] not in [item['report']['id'] for item in data['items']]
 
 
