@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, update
 from .auth import AuditLog, Roles, SessionGuard
 from .contracts import Position
+from .demo_policy import forbid_demo_writes
 from .maintenance import MaintenanceQueue, RoutePlanner, StatusWorkflow
 from .profile import AccountFormat
 from . import schema as s
@@ -120,7 +121,7 @@ class OperatorController:
         return MaintenanceService(request).plan(limit, start)
 
     def change_status(self, report_id: UUID, payload: TransitionRequest, request: Request,
-                      session=Depends(field_staff)):
+                      session=Depends(field_staff), _writer=Depends(forbid_demo_writes)):
         return MaintenanceService(request).transition(str(report_id), payload, session)
 
     def status_timeline(self, report_id: UUID, request: Request):

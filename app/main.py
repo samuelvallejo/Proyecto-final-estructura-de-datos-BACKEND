@@ -18,6 +18,7 @@ from .operator_api import OperatorController
 from .duplicates_api import DuplicatesController
 from .search_api import SearchController
 from .scan_metrics import ScanMetrics, instance_id
+from .demo_policy import DemoPolicy
 from .ai import AIService, FrameValidator
 from .auth import AuditLog, AuthController, DemoAccounts, PasswordHasher, SessionGuard, Vault
 from .community import CommunityController
@@ -355,6 +356,7 @@ class BacheScanApplication:
                 raise RuntimeError('Ejecuta alembic upgrade head antes de iniciar la API.')
         state.engine = engine
         DemoAccounts.seed(engine, state.vault, settings)
+        state.demo_policy = DemoPolicy(engine, state.vault, settings)
         state.repo = Repository(engine, settings)
         state.ai = await asyncio.to_thread(AIService, settings)
         state.detector = state.ai.local

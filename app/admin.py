@@ -11,6 +11,7 @@ from .profile import DAY_MS, AccountFormat, SessionHistory
 from .repository import PotholeStatus
 from .structures import HashMap, HashSet, SinglyLinkedList
 from .trips import TripService
+from .demo_policy import HIDDEN, demo_policy, forbid_demo_writes
 
 
 class RoleChange(BaseModel):
@@ -78,7 +79,8 @@ class AdminService:
                 'generatedAt': now,
             }
 
-    def users(self, limit):
+    def users(self, limit, masker=None):
+        """Accounts with activity; ``masker`` (a DemoPolicy) hides real people's e-mails from demo sessions."""
         with self.engine.connect() as conn:
             rows = conn.execute(select(s.users).order_by(s.users.c.created_at.desc()).limit(limit)).mappings().all()
             ids = [row['id'] for row in rows]
@@ -97,8 +99,11 @@ class AdminService:
             result = SinglyLinkedList[dict]()
             for row in rows:
                 name = AccountFormat.decrypt(self.vault, row['display_name'])
+                email = AccountFormat.decrypt(self.vault, row['email'])
+                if masker is not None and not masker.is_demo(row['id']):
+                    email = masker.mask_email(email)  # Public demo admin: never reveal a real person's address.
                 result.append({'id': row['id'], 'displayName': name, 'initials': AccountFormat.initials(name),
-                               'email': AccountFormat.decrypt(self.vault, row['email']), 'role': Roles.of(conn, row['id']),
+                               'email': email, 'role': Roles.of(conn, row['id']),
                                'active': row['active'], 'createdAt': row['created_at'], 'lastSeenAt': last_seen.get(row['id']),
                                'sessions': sessions.get(row['id'], 0), 'reports': reports.get(row['id'], 0),
                                'passes': passes.get(row['id'], 0), 'trips': trips.get(row['id'], 0)})
@@ -175,7 +180,7 @@ class AdminService:
                  'details': row['details'] or {}, 'sessionId': row['session_id'], 'userId': row['user_id'],
                  'userName': names.get(row['user_id'], '')} for row in rows]
 
-    def trips(self, limit):
+    def trips(self, limit, masker=None):
         now = s.Clock.now()
         with self.engine.connect() as conn:
             rows = conn.execute(select(s.trips).order_by(s.trips.c.created_at.desc()).limit(limit)).mappings().all()
@@ -186,6 +191,9 @@ class AdminService:
                     data = json.loads(self.vault.decrypt(row['encrypted_details']))
                 except Exception:
                     data = {}
+                if masker is not None and not masker.is_demo(row['user_id']):
+                    # Trip names and places can reveal where a real person lives or works.
+                    data = {**data, 'name': HIDDEN, 'pointA': HIDDEN, 'pointB': HIDDEN}
                 result.append({'id': row['id'], 'userId': row['user_id'], 'userName': names.get(row['user_id'], ''),
                                'name': data.get('name', ''), 'pointA': data.get('pointA', ''), 'pointB': data.get('pointB', ''),
                                'vehicle': data.get('vehicle'), 'startedAt': row['created_at'], 'endedAt': row['ended_at'],
@@ -217,20 +225,28 @@ class AdminController:
     def overview(self, request: Request):
         return self._service(request).overview()
 
-    def users(self, request: Request, limit: int = Query(200, ge=1, le=500)):
-        return {'users': self._service(request).users(limit)}
+    @staticmethod
+    def _masker(request: Request, admin: dict):
+        policy = demo_policy(request)
+        return policy if policy.restricts(admin) else None
 
-    def change_role(self, user_id: UUID, payload: RoleChange, request: Request, admin=Depends(SessionGuard.admin)):
+    def users(self, request: Request, limit: int = Query(200, ge=1, le=500), admin=Depends(SessionGuard.admin)):
+        return {'users': self._service(request).users(limit, self._masker(request, admin))}
+
+    def change_role(self, user_id: UUID, payload: RoleChange, request: Request, admin=Depends(SessionGuard.admin),
+                    _writer=Depends(forbid_demo_writes)):
         return self._service(request).change_role(str(user_id), payload.role, admin)
 
-    def change_active(self, user_id: UUID, payload: ActiveChange, request: Request, admin=Depends(SessionGuard.admin)):
+    def change_active(self, user_id: UUID, payload: ActiveChange, request: Request, admin=Depends(SessionGuard.admin),
+                      _writer=Depends(forbid_demo_writes)):
         return self._service(request).change_active(str(user_id), payload.active, admin)
 
     def reports(self, request: Request, status: StatusFilter = 'all', limit: int = Query(100, ge=1, le=200),
                 offset: int = Query(0, ge=0)):
         return self._service(request).reports(status, limit, offset)
 
-    def change_status(self, report_id: UUID, payload: StatusChange, request: Request, admin=Depends(SessionGuard.admin)):
+    def change_status(self, report_id: UUID, payload: StatusChange, request: Request, admin=Depends(SessionGuard.admin),
+                      _writer=Depends(forbid_demo_writes)):
         return self._service(request).change_status(str(report_id), payload, admin)
 
     def sessions(self, request: Request, limit: int = Query(100, ge=1, le=300)):
@@ -239,5 +255,5 @@ class AdminController:
     def audit(self, request: Request, limit: int = Query(150, ge=1, le=500)):
         return {'events': self._service(request).audit_trail(limit)}
 
-    def trips(self, request: Request, limit: int = Query(100, ge=1, le=300)):
-        return {'trips': self._service(request).trips(limit)}
+    def trips(self, request: Request, limit: int = Query(100, ge=1, le=300), admin=Depends(SessionGuard.admin)):
+        return {'trips': self._service(request).trips(limit, self._masker(request, admin))}

@@ -40,7 +40,8 @@ def client(monkeypatch, custom_detector):
     settings = Settings(_env_file=None, database_url=str(scoped), ai_provider='local', scan_interval_seconds=0,
                         data_encryption_key=Fernet.generate_key().decode(), secure_cookies=False,
                         local_scan_interval_seconds=0,
-                        nominatim_user_agent='', gemini_api_key='', max_scans_per_hour=100)
+                        nominatim_user_agent='', gemini_api_key='', max_scans_per_hour=100,
+                        demo_read_only=False)  # Tests use the demo accounts to exercise writes.
     # str(URL) hides passwords; an explicit render is needed when the server uses one.
     settings.database_url = scoped.render_as_string(hide_password=False)
     app = create_app(settings)

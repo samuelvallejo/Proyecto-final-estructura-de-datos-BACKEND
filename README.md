@@ -144,6 +144,8 @@ Con `DEMO_ACCOUNTS=true` (valor por defecto) la API crea o actualiza al iniciar 
 
 El administrador ve y gestiona todo desde `/api/admin/*`: resumen global, usuarios (cambiar rol, activar o desactivar y cerrar sus sesiones), todos los baches con cambio de estado, sesiones de todas las cuentas, recorridos y la huella de auditoría. Siempre queda al menos un administrador activo. Las cuentas nuevas reciben el rol Conductor.
 
+Con `DEMO_READ_ONLY=true` (por defecto), las cuentas demo no pueden cambiar roles, accesos ni estados de baches, y el administrador demo ve enmascarados los correos y lugares de las cuentas reales. Consulta [DEMO_MODE.md](docs/DEMO_MODE.md).
+
 > Las credenciales demo son públicas por diseño. Si la aplicación tiene usuarios reales, cambia `DEMO_ADMIN_PASSWORD` o desactiva las cuentas con `DEMO_ACCOUNTS=false`.
 
 ## Perfil, sesiones y huella interna

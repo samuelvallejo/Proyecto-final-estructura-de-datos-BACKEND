@@ -281,7 +281,9 @@ class ProfileController:
         return request.app.state.profile
 
     def me(self, request: Request, session=Depends(SessionGuard.current)):
-        return self._profile(request).me(session)
+        policy = request.app.state.demo_policy
+        return {**self._profile(request).me(session), 'isDemo': policy.is_demo(session['user_id']),
+                'readOnly': policy.restricts(session)}
 
     def my_sessions(self, request: Request, limit: int = Query(30, ge=1, le=100), session=Depends(SessionGuard.current)):
         return {'sessions': self._profile(request).sessions(session, limit)}
