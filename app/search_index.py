@@ -7,12 +7,18 @@
   last word the user is still typing ("panam" -> "panamericana") and suggests
   place names by prefix.
 
+* ``BitmapIndex`` filters by risk level, damage type and status with bitwise
+  AND/OR and counts each facet with popcount.
+* ``AvlTree`` keyed by (timestamp, id) answers date ranges in O(log n + k).
+
 Building costs O(total characters). A query costs O(query length + size of the
 smallest posting set) for exact words, plus the trie expansion of the last word.
 """
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from .avl_tree import AvlTree
+from .bitmap_index import BitmapIndex
 from .priority_queue import IndexedMaxHeap
 from .structures import Stack
 
@@ -125,6 +131,8 @@ class ReportSearchIndex:
         self.words = PrefixTrie()
         self.places = PrefixTrie()
         self.fields: dict[str, dict[str, set[str]]] = {}
+        self.facets = BitmapIndex()
+        self.by_date: AvlTree[tuple[int, str], str] = AvlTree()
         for report in self.reports.values():
             self._add(report)
 
@@ -139,6 +147,9 @@ class ReportSearchIndex:
             'text': set(self.tokenizer.tokens(report.get('aiDescription'))),
         }
         self.fields[report['id']] = fields
+        self.facets.add(report['id'], {'risk': report.get('hazardLevel'), 'damage': report.get('potholeType') or 'OTRO_DANO',
+                                       'status': report.get('status')})
+        self.by_date.insert((report['timestamp'], report['id']), report['id'])
         tokens = set().union(*fields.values())
         self.index.add(report['id'], tokens)
         for token in tokens:
@@ -151,23 +162,49 @@ class ReportSearchIndex:
                 self.places.insert(' '.join(words[start:]), f'{kind}|{label}')
 
     def search(self, query: str) -> tuple[list[dict], list[str]]:
+        result = self.filter(query)
+        return result['reports'], result['tokens']
+
+    def filter(self, query: str | None = None, risk: list[str] | None = None, damage: list[str] | None = None,
+               since: int | None = None, until: int | None = None) -> dict:
+        """Text, category and date filters combined as bitsets, with facet counts.
+
+        Facet counts follow the usual rule of faceted search: the counts of a field
+        apply every filter except that field's own, so the user sees how many
+        results each choice would give.
+        """
+        tokens, relevance = [], {}
+        base = self.facets.all
+        if query is not None:
+            tokens, relevance = self._text_matches(query)
+            base &= self.facets.of(relevance)
+        if since is not None or until is not None:
+            low, high = (since if since is not None else 0, ''), (until if until is not None else 2 ** 63, '\uffff')
+            base &= self.facets.of(identity for _, identity in self.by_date.range(low, high))
+        risk_bits, damage_bits = self.facets.any_of('risk', risk), self.facets.any_of('damage', damage)
+        selected = base & risk_bits & damage_bits
+        ranked = sorted((-relevance.get(identity, 0), -self.reports[identity]['hazardScore'],
+                         -self.reports[identity]['timestamp'], identity) for identity in self.facets.documents(selected))
+        return {'reports': [self.reports[item[-1]] for item in ranked], 'tokens': tokens,
+                'facets': {'risk': self.facets.counts('risk', base & damage_bits),
+                           'damage': self.facets.counts('damage', base & risk_bits)}}
+
+    def _text_matches(self, query: str) -> tuple[list[str], dict[str, int]]:
+        """Report id -> relevance for the words of ``query`` (empty when no word is usable)."""
         tokens = self.tokenizer.tokens(query)
         if not tokens:
-            return [], []
+            return [], {}
         # Every word must match exactly, except the last one, which may still be incomplete.
         alternatives = [{token} for token in tokens[:-1]]
         alternatives.append({word for word, _ in self.words.complete(tokens[-1], self.MAX_PREFIX_EXPANSION)})
         sets = [set().union(*(self.index.documents(word) for word in words)) for words in alternatives]
-        matches = self.index.intersect(sets)
-        scored = []
-        for identity in matches:
+        relevance = {}
+        for identity in self.index.intersect(sets):
             fields = self.fields[identity]
             # A word found in a place name weighs more than one found in the description.
-            relevance = sum(max((weight for name, weight in FIELD_WEIGHTS.items() if words & fields[name]), default=0)
-                            for words in alternatives)
-            report = self.reports[identity]
-            scored.append((-relevance, -report['hazardScore'], -report['timestamp'], identity))
-        return [self.reports[item[-1]] for item in sorted(scored)], tokens
+            relevance[identity] = sum(max((weight for name, weight in FIELD_WEIGHTS.items() if words & fields[name]), default=0)
+                                      for words in alternatives)
+        return tokens, relevance
 
     def suggest(self, prefix: str, limit: int) -> list[dict]:
         normalized = ' '.join(self.tokenizer.normalize(prefix).split())
@@ -181,4 +218,4 @@ class ReportSearchIndex:
 
     def stats(self) -> dict:
         return {'documents': len(self.reports), 'terms': len(self.index.postings),
-                'trieNodes': self.words.nodes + self.places.nodes}
+                'trieNodes': self.words.nodes + self.places.nodes, 'dateTreeHeight': self.by_date.height}

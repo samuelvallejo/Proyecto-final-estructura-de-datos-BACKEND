@@ -92,3 +92,32 @@ def test_search_agrees_with_linear_scan_on_random_data():
                                               f"{'moderado medio'} bache hueco sin verificar"))
             for position, word in enumerate(words))}
         assert {item['id'] for item in index.search(query)[0]} == expected, query
+
+
+def test_filters_combine_text_categories_and_dates_with_facets():
+    index = ReportSearchIndex(REPORTS)
+    result = index.filter('pasto', risk=['HIGH', 'CRITICAL'])
+    assert [item['id'] for item in result['reports']] == ['b', 'd', 'c']
+    # Risk counts ignore the risk filter; damage counts apply it.
+    assert result['facets']['risk'] == {'CRITICAL': 1, 'HIGH': 2, 'MEDIUM': 1}
+    assert result['facets']['damage'] == {'BACHE': 3}
+    dated = index.filter(None, since=3, until=5)
+    assert [item['id'] for item in dated['reports']] == ['b', 'a'] and dated['tokens'] == []
+    assert index.filter(None, damage=['GRIETA'])['reports'] == []
+    assert [item['id'] for item in index.filter('calle', since=9)['reports']] == ['d']
+    assert index.stats()['dateTreeHeight'] >= 1
+
+
+def test_filters_agree_with_a_linear_scan():
+    rng = random.Random(8)
+    levels = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+    reports = [report(f'r{i}', rng.choice(['Calle 18', 'Carrera 45']), 'Centro', level=rng.choice(levels),
+                      timestamp=rng.randint(0, 1000)) for i in range(300)]
+    index = ReportSearchIndex(reports)
+    for _ in range(40):
+        wanted = rng.sample(levels, 2)
+        low, high = sorted(rng.sample(range(1001), 2))
+        got = {item['id'] for item in index.filter('carrera', risk=wanted, since=low, until=high)['reports']}
+        expected = {item['id'] for item in reports if item['zone']['street'] == 'Carrera 45'
+                    and item['hazardLevel'] in wanted and low <= item['timestamp'] <= high}
+        assert got == expected

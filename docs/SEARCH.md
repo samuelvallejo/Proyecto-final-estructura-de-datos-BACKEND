@@ -24,6 +24,18 @@ el `IndexedMaxHeap` de la cola de mantenimiento.
 | Intersección de `w` palabras | O(w · tamaño del conjunto menor) |
 | Completar un prefijo `p` | O(p + nodos del subárbol) + O(k log k) |
 
+## Filtros y conteos (búsqueda facetada)
+
+| Estructura | Archivo | Uso |
+|---|---|---|
+| Índice de bitmaps | `app/bitmap_index.py` | Un entero por valor (riesgo, daño, estado) donde el bit *i* indica el reporte *i*. OR combina valores de un campo, AND combina campos y `bit_count` cuenta sin recorrer |
+| Árbol AVL con tamaños de subárbol | `app/avl_tree.py` | Clave (fecha, id): rango de fechas en O(log n + k) y conteo en O(log n); se mantiene equilibrado con rotaciones |
+
+`GET /api/reports/search` acepta `risk` y `damage` (repetibles), `from` y `to` (milisegundos) además de `q`; exige al
+menos uno. Antes, el navegador filtraba por riesgo y daño solo los primeros 200 resultados del servidor; ahora el
+filtro ocurre sobre todos los reportes activos. `facets` devuelve cuántos resultados daría cada riesgo y cada daño:
+los conteos de un campo aplican todos los filtros excepto el suyo.
+
 ## Caché consistente entre réplicas
 
 El índice se guarda en memoria del proceso, pero cada consulta compara una **huella** de la base:
