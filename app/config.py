@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     demo_operator_password: str = 'Operario-BacheScan-2026!'
     demo_driver_email: str = 'conductor@bachescan.app'
     demo_driver_password: str = 'Conductor-BacheScan-2026!'
+    # Demo credentials are public: keep their sessions from changing shared data or reading real people's details.
+    demo_read_only: bool = True
     session_hours: int = 24
     data_encryption_key: str = ''
     secure_cookies: bool = True
