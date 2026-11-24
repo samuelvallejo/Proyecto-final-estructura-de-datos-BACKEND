@@ -1,6 +1,6 @@
 # The frontend is pinned to an exact commit of its own repository.
 FROM node:24-bookworm-slim AS frontend
-ARG FRONTEND_COMMIT=fc7c6e6d5fdf7b665eb0df61d903961eab2c62b1
+ARG FRONTEND_COMMIT=312cab7ac09dd14ada0d59b4173b3d72e7e86abf
 ADD https://github.com/samuelvallejo/proyecto-final-estructura-de-datos-FRONTEND/archive/${FRONTEND_COMMIT}.tar.gz /tmp/frontend.tar.gz
 RUN mkdir /frontend && tar -xzf /tmp/frontend.tar.gz -C /frontend --strip-components=1
 WORKDIR /frontend
