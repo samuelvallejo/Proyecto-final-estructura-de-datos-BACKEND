@@ -106,7 +106,7 @@ La integración crea y elimina esquemas `test_*` dentro de esa base. No uses una
 
 ## Cola de escaneo y latencia
 
-El endpoint `POST /api/scan` encola el fotograma en una cola FIFO con dos trabajadores (asignación round robin mediante lista circular). Cuando la cola supera `max_pending_scans` la respuesta es `429` con cabecera `Retry-After`. Cada análisis registra su latencia y la conserva en el historial de la sesión (`GET /api/scans/history`).
+El endpoint `POST /api/scan` encola el fotograma en una cola FIFO con dos trabajadores (asignación round robin mediante lista circular). Cuando la cola supera `max_pending_scans` la respuesta es `429` con cabecera `Retry-After`. Cada análisis registra su latencia y la conserva en el historial de la sesión (`GET /api/scans/history`). El historial y los percentiles se leen de PostgreSQL para que todas las réplicas respondan lo mismo; consulta [REPLICAS.md](docs/REPLICAS.md).
 
 
 ## Avisos comunitarios y alertas de cercanía
